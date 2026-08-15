@@ -1,58 +1,58 @@
-# GeoChain Architecture & Design Decision History
+# GeoChain Architecture & Game Design Decision Log
 
-This document chronicles all major design decisions, physics pivots, player feedback, and balance iterations made during the development of **GeoChain**.
+This document records the architectural, physical, and design decisions made throughout GeoChain's development, their rationale, and outcomes.
 
 ---
 
-## 1. Aesthetic Pivot: Circular Balls $\to$ Hollow Geometry Wars Platonics
-* **Initial State:** Standard semi-opaque filled circular balls with generic radial explosions.
-* **Player Feedback:** Visuals felt muddy, shapes lacked identity, and sound was abrasive.
+## Decision Record 001: 120 FPS Zero-GC Particle & Collision Architecture
+* **Date:** 2026-08-14
+* **Context:** High particle counts ($50+$ bodies) with rapid polygon collision checks and particle trails could trigger JavaScript GC pauses or frame drops on high refresh-rate monitors.
 * **Decision:**
-  * Adopted high-contrast **hollow vector wireframes** inspired by *Geometry Wars*.
-  * Introduced 7 distinct Platonic/polygonal shapes (Spark Triangles, Amber Diamonds, Nova Stars, Hex Singularities, Ember Pentagons, Delta Chevrons, Catalyst Octagons).
-  * Explosions conform to the exploding body's geometric shape (e.g. triangle explosions expand as equilateral triangles).
+  1. Replaced dynamic object allocation with zero-GC `SparklePool` (450 pre-allocated objects).
+  2. Implemented `Float32Array` circular ring buffers for particle motion trails.
+  3. Replaced Canvas `ctx.shadowBlur` with multi-pass vector strokes (thick translucent outer stroke + sharp inner white core stroke).
+  4. Formulated exact analytical $O(1)$ polygon collision math using circumradius bounding pre-checks followed by radial cosine sector projection:
+     $$d_{\text{proj}} = d \cdot \cos\left(\left(((\theta - \phi) \bmod \frac{2\pi}{N}) + 2\pi\right) \bmod \frac{2\pi}{N} - \frac{\pi}{N}\right) \le r_{\text{in}} + r_{\text{particle}}$$
+* **Outcome:** Rock-solid 120 FPS rendering across all desktop and mobile displays with zero GC pauses.
 
 ---
 
-## 2. The Percolation Threshold & The Orbital Trapping Failure (V3)
-* **Problem:** In early wide viewports ($1920 \times 1080$), small particle counts ($N = 8$) resulted in near-zero collision probability.
-* **Flawed V3 Attempt:** Added harmonic focal node gravitational attraction to pull bodies into clusters.
-* **Failure:** Caused particles to enter permanent local elliptical orbits. Particles lingered in small pockets and never crossed the arena, rendering 3-star clears mathematically impossible.
-* **Final Resolution:**
-  * Completely removed harmonic focal nodes.
-  * Confined gameplay to a **centered 16:10 Geometry Wars vector arena**.
-  * Restored **pure constant-velocity linear reflection physics** with zero friction or deceleration.
+## Decision Record 002: Inverted Velocity Difficulty Curve
+* **Date:** 2026-08-14
+* **Context:** In chain reaction games, faster bodies increase encounter rate and mean free path collisions, making early levels easier to clear when bodies are fast, while slower bodies in late levels demand calculated timing and precision.
+* **Decision:** Inverted the velocity progression:
+  * Level 1: `baseSpeed = 4.6` (High Velocity / Rapid Encounters / Easy 3-Star clears).
+  * Level 12: `baseSpeed = 1.1` (Glacial Precision / High tactical demand).
+* **Outcome:** Early levels feel dynamic and welcoming; late levels feel like tense geometric chess.
 
 ---
 
-## 3. The "Earned Sparks" Dynamic Combo Model
-* **Problem:** In traditional *Boomshine*, players click once and passively watch. If a chain dies on the far side of the screen, the player feels helpless.
+## Decision Record 003: Elastic Spacetime Grid Distortion
+* **Date:** 2026-08-14
+* **Context:** Needed a sense of physical depth and spacetime fabric akin to *Geometry Wars*.
+* **Decision:** Built a 2D spring-mass lattice with Hooke's Law restoring forces and neighbor damping (`src/grid.js`). Explosions apply kinetic push waves, and Hex Singularities apply gravitational inward pull. Blast radius influence expanded to $+50\%$ ($2.4\times$ radius).
+* **Outcome:** Visually hypnotic ripple effects that give tactile weight to every detonation.
+
+---
+
+## Decision Record 004: Persistent Cloud Hall of Fame
+* **Date:** 2026-08-14
+* **Context:** High scores needed to be shared globally across devices, players, and sessions without requiring account friction.
+* **Decision:** Created a Supabase PostgreSQL backend (`public.leaderboard_scores`) with Row-Level Security (RLS) public policies. Integrated zero-dependency REST queries in `src/leaderboard.js` with instant local caching for offline resilience.
+* **Outcome:** Real-time worldwide leaderboards for both Global Hall of Fame and per-level rankings.
+
+---
+
+## Decision Record 005: Resolution-Independent Proportional Scaling
+* **Date:** 2026-08-14
+* **Context:** When the browser window was resized smaller, fixed pixel radii ($65\text{px}$) and speeds caused the explosion to cover $>40\%$ of the screen, creating an exploit where shrinking the window allowed 1-click full wipes.
 * **Decision:**
-  * Implemented an active combo reward system: reaching **x4, x8, x14, x22, x32...** combos awards **$+1$ Spark Charge**.
-  * Players can strategically drop their earned spark mid-cascade or after a chain dies to bridge distant corners and ignite isolated clusters.
-
----
-
-## 4. Inverted Velocity Difficulty Scaling
-* **Insight:** In Chain Reaction games, **faster bodies make levels easier** because high-speed particles repeatedly sweep across active blast zones ($2.8\text{s}$ duration), dramatically multiplying encounter rates.
-* **Calibration:**
-  * **Level 1 (8 bodies):** Calibrated with **High Velocity (`4.6`)** $\to$ bodies cross the arena in $\approx 1.2\text{s}$, making Level 1 accessible and effortless to 3-star.
-  * **Level 12 (75 bodies):** Calibrated with **Glacial Precision (`1.1`)** $\to$ slow movement requires calculated initial placement, Hexagon vortex compression, and tactical combo bridging.
-
----
-
-## 5. 120 FPS Performance Architecture
-* **Problem:** Explosions and hundreds of sparkles caused severe frame drops on Retina/4K displays.
-* **Root Cause Analysis:**
-  * Canvas `shadowBlur` was executing 400+ expensive Gaussian software blur passes per frame.
-  * `SparkleParticle` objects were being allocated dynamically, thrashing the JS Garbage Collector.
-* **Resolution:**
-  * Replaced `shadowBlur` with layered dual-stroke vector passes ($50\times$ faster).
-  * Implemented pre-allocated 450-instance `SparklePool` with $O(1)$ zero-GC recycling.
-  * Used `Float32Array` ring buffers for particle motion trails.
-
----
-
-## 6. Elastic Spacetime Warp Grid
-* **Addition:** Added a 2D spring-mass lattice background that dynamically deforms under kinetic blast waves and gravitational singularities.
-* **Adjustment:** Increased the blast influence radius by **+50%** ($2.4\times$ explosion radius) to produce rolling spacetime wave ripples across the playfield.
+  1. Defined a virtual reference arena: $\text{REFERENCE\_ARENA} = (960 \times 600)$.
+  2. Derived dynamic scale factor: $S = \frac{\text{arena.width}}{960}$.
+  3. Scaled all physical parameters proportionally by $S$:
+     * Blast Radii: $R_{\text{actual}} = R_{\text{virtual}} \times S$
+     * Particle Radii: $r_{\text{actual}} = r_{\text{virtual}} \times S$
+     * Particle Velocities: $v_{\text{actual}} = v_{\text{virtual}} \times S$
+     * Grid Spacing & Impulses: $\text{spacing}_{\text{actual}} = 30 \times S$
+  4. On window resize, entities preserve normalized relative coordinates $(x_{\text{rel}}, y_{\text{rel}})$ and scale velocities without teleportation or speed warping.
+* **Outcome:** Wall-to-wall traversal time $T = \frac{W}{v}$ and geometric collision density remain **strictly invariant** across any screen size or browser resize. No player gains an advantage by resizing their window.

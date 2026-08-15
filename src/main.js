@@ -1,6 +1,5 @@
 import { ChainReactionGame } from './game.js';
 import { CAMPAIGN_LEVELS } from './levels.js';
-import { PARTICLE_TYPES } from './particles.js';
 import { soundEngine } from './audio.js';
 import { cloudLeaderboard } from './leaderboard.js';
 
@@ -21,11 +20,9 @@ const hudQuotaContainer = document.getElementById('hud-quota-container');
 const btnRestart = document.getElementById('btn-restart');
 
 // Header Buttons
-const modeTabs = document.querySelectorAll('.mode-tab-btn');
 const btnAudioToggle = document.getElementById('btn-audio-toggle');
 const btnLevelSelect = document.getElementById('btn-level-select');
 const btnLeaderboard = document.getElementById('btn-leaderboard');
-const btnSandboxToggle = document.getElementById('btn-sandbox-toggle');
 
 // Round Result Modal Elements
 const modalResult = document.getElementById('modal-result');
@@ -63,25 +60,10 @@ const modalLeaderboard = document.getElementById('modal-leaderboard');
 const leaderboardRows = document.getElementById('leaderboard-rows');
 const btnCloseLeaderboard = document.getElementById('btn-close-leaderboard');
 const btnClearScores = document.getElementById('btn-clear-scores');
-const leaderboardFilterTabs = document.querySelectorAll('.leaderboard-filter-tabs .filter-tab');
-
-// Sandbox Tray
-const sandboxTray = document.getElementById('sandbox-tray');
-const sliderCount = document.getElementById('slider-particle-count');
-const valCount = document.getElementById('val-particle-count');
-const sliderRadius = document.getElementById('slider-blast-radius');
-const valRadius = document.getElementById('val-blast-radius');
-const sliderDuration = document.getElementById('slider-blast-duration');
-const valDuration = document.getElementById('val-blast-duration');
-const sliderSpeed = document.getElementById('slider-particle-speed');
-const valSpeed = document.getElementById('val-particle-speed');
-const particleChipsContainer = document.getElementById('particle-chips-container');
-const btnApplySandbox = document.getElementById('btn-apply-sandbox');
 
 let lastTime = performance.now();
 let game = null;
 let pendingHighScore = null;
-let currentLeaderboardFilter = 'all';
 
 function init() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -94,12 +76,10 @@ function init() {
 
   game = new ChainReactionGame(canvas, {
     onStateChange: handleGameStateChange,
-    onLevelComplete: handleLevelComplete,
-    onChaosComplete: handleChaosComplete
+    onLevelComplete: handleLevelComplete
   });
 
   game.resize(rect.width, rect.height);
-  renderSandboxChips();
   game.startCampaignLevel(0);
   setupEventListeners();
 
@@ -134,45 +114,25 @@ function handleGameStateChange(data) {
   hudScoreValue.textContent = data.score.toLocaleString();
   hudComboValue.textContent = `x${data.combo}`;
 
-  if (data.mode === 'campaign') {
-    hudLevelGroup.style.display = 'flex';
-    hudLevelValue.textContent = data.level;
-    hudChargesValue.textContent = data.charges;
-    hudQuotaContainer.style.display = 'flex';
+  hudLevelGroup.style.display = 'flex';
+  hudLevelValue.textContent = data.level;
+  hudChargesValue.textContent = data.charges;
+  hudQuotaContainer.style.display = 'flex';
 
-    hudQuotaCurrent.textContent = data.exploded;
-    hudQuotaTarget.textContent = data.target;
+  hudQuotaCurrent.textContent = data.exploded;
+  hudQuotaTarget.textContent = data.target;
 
-    const pct = Math.min(100, (data.exploded / data.target) * 100);
-    hudQuotaFill.style.width = `${pct}%`;
+  const pct = Math.min(100, (data.exploded / data.target) * 100);
+  hudQuotaFill.style.width = `${pct}%`;
 
-    const lvlConfig = CAMPAIGN_LEVELS[data.level - 1];
-    if (lvlConfig && data.state === 'ready') {
-      const starT = lvlConfig.stars ? ` (3★ @ ${lvlConfig.stars[2]})` : '';
-      const speedBadge = lvlConfig.speedLabel ? ` • Speed: ${lvlConfig.speedLabel}` : '';
-      hintBanner.textContent = `${lvlConfig.tip || 'Click to initiate reaction'}${starT}${speedBadge}`;
-      hintBanner.classList.remove('hide');
-    } else {
-      hintBanner.classList.add('hide');
-    }
-  } else if (data.mode === 'endless') {
-    hudLevelGroup.style.display = 'none';
-    hudQuotaContainer.style.display = 'none';
-    hudChargesValue.textContent = `${Math.round(data.endlessEnergy)}%`;
-    hintBanner.textContent = data.endlessEnergy >= 100 ? 'Spark Ready! Click inside arena' : 'Recharging Spark...';
+  const lvlConfig = CAMPAIGN_LEVELS[data.level - 1];
+  if (lvlConfig && data.state === 'ready') {
+    const starT = lvlConfig.stars ? ` (3★ @ ${lvlConfig.stars[2]})` : '';
+    const speedBadge = lvlConfig.speedLabel ? ` • Speed: ${lvlConfig.speedLabel}` : '';
+    hintBanner.textContent = `${lvlConfig.tip || 'Click to initiate reaction'}${starT}${speedBadge}`;
     hintBanner.classList.remove('hide');
-  } else if (data.mode === 'chaos') {
-    hudLevelGroup.style.display = 'none';
-    hudQuotaContainer.style.display = 'none';
-    hudChargesValue.textContent = `${data.chaosTimeLeft.toFixed(1)}s`;
-    hintBanner.textContent = 'Keep the chain alive before time expires!';
-    hintBanner.classList.remove('hide');
-  } else if (data.mode === 'sandbox') {
-    hudLevelGroup.style.display = 'none';
-    hudQuotaContainer.style.display = 'none';
-    hudChargesValue.textContent = '∞';
-    hintBanner.textContent = 'Sandbox Lab: Click inside arena (Unlimited Triggers)';
-    hintBanner.classList.remove('hide');
+  } else {
+    hintBanner.classList.add('hide');
   }
 }
 
@@ -343,38 +303,6 @@ async function handleLevelComplete(result) {
   }
 }
 
-function handleChaosComplete(result) {
-  modalResult.classList.add('show');
-  modalResultIcon.className = 'modal-icon-badge success';
-  modalResultIcon.textContent = '⚡';
-  modalResultTitle.textContent = 'Chaos Run Finished!';
-  modalResultDesc.textContent = `Cleared ${result.exploded} geometries before the silence.`;
-  modalStarsContainer.style.display = 'none';
-  modalRowSpeed.style.display = 'none';
-  modalRowBonus.style.display = 'none';
-  btnModalNext.style.display = 'none';
-
-  modalStatExploded.textContent = `${result.exploded}`;
-  modalStatScore.textContent = result.score.toLocaleString();
-  modalStatBestCombo.textContent = `x${result.highestCombo}`;
-
-  const savedTag = localStorage.getItem('cr_player_tag') || 'ACE';
-  playerInitialsInput.value = savedTag;
-
-  if (result.levelComparison) {
-    renderLevelComparisonTable(result.levelComparison, savedTag);
-    if (result.levelComparison.qualifies) {
-      highScoreBanner.style.display = 'flex';
-      highScoreText.textContent = `⭐ NEW CHAOS RECORD! (Rank #${result.levelComparison.rank}) ⭐`;
-      pendingHighScore = {
-        level: 'Chaos',
-        score: result.score,
-        combo: result.highestCombo
-      };
-    }
-  }
-}
-
 function commitPendingHighScore() {
   if (pendingHighScore) {
     const rawTag = playerInitialsInput.value.trim().toUpperCase() || 'ACE';
@@ -391,17 +319,14 @@ async function renderLeaderboard() {
   
   // 1. Render Local / Cached scores first for instant responsiveness
   let scores = game.highScores || [];
-  if (currentLeaderboardFilter !== 'all') {
-    scores = scores.filter(s => s.mode.toLowerCase() === currentLeaderboardFilter.toLowerCase());
-  }
 
   const renderRows = (list) => {
     leaderboardRows.innerHTML = '';
     if (list.length === 0) {
       leaderboardRows.innerHTML = `
         <tr>
-          <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">
-            No records found in this category yet.
+          <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">
+            No records found yet.
           </td>
         </tr>
       `;
@@ -420,8 +345,7 @@ async function renderLeaderboard() {
       tr.innerHTML = `
         <td>${rankBadge}</td>
         <td class="tag-cell">${entry.name}</td>
-        <td><span class="mode-tag ${(entry.mode || 'Campaign').toLowerCase()}">${entry.mode || 'Campaign'}</span></td>
-        <td>${entry.mode === 'Campaign' ? `Lvl ${entry.level}` : '-'}</td>
+        <td>${entry.level ? `Lvl ${entry.level}` : '-'}</td>
         <td style="color: var(--accent-emerald); font-weight: 700;">x${entry.combo}</td>
         <td class="score-cell">${entry.score.toLocaleString()}</td>
       `;
@@ -433,7 +357,7 @@ async function renderLeaderboard() {
 
   // 2. Fetch Live Global Cloud Records from Supabase
   try {
-    const cloudScores = await cloudLeaderboard.fetchGlobalTop10(currentLeaderboardFilter);
+    const cloudScores = await cloudLeaderboard.fetchGlobalTop10('all');
     if (cloudScores && cloudScores.length > 0) {
       renderRows(cloudScores);
     }
@@ -486,34 +410,6 @@ function openLevelSelectModal() {
   modalLevels.classList.add('show');
 }
 
-function renderSandboxChips() {
-  particleChipsContainer.innerHTML = '';
-  Object.values(PARTICLE_TYPES).forEach(type => {
-    const chip = document.createElement('button');
-    const isSelected = game.sandboxConfig.enabledTypes.includes(type.id);
-    chip.className = `particle-chip-btn ${isSelected ? 'active' : ''}`;
-    chip.textContent = type.name;
-    chip.style.borderColor = isSelected ? type.color : '';
-
-    chip.addEventListener('click', () => {
-      const idx = game.sandboxConfig.enabledTypes.indexOf(type.id);
-      if (idx > -1) {
-        if (game.sandboxConfig.enabledTypes.length > 1) {
-          game.sandboxConfig.enabledTypes.splice(idx, 1);
-          chip.classList.remove('active');
-          chip.style.borderColor = '';
-        }
-      } else {
-        game.sandboxConfig.enabledTypes.push(type.id);
-        chip.classList.add('active');
-        chip.style.borderColor = type.color;
-      }
-    });
-
-    particleChipsContainer.appendChild(chip);
-  });
-}
-
 function setupEventListeners() {
   window.addEventListener('resize', handleResize);
 
@@ -533,35 +429,6 @@ function setupEventListeners() {
     }
   });
 
-  modeTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      modeTabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      const mode = tab.dataset.mode;
-
-      sandboxTray.classList.remove('open');
-
-      if (mode === 'campaign') {
-        btnLevelSelect.style.display = 'flex';
-        btnSandboxToggle.style.display = 'none';
-        game.startCampaignLevel(game.currentLevelIndex);
-      } else if (mode === 'endless') {
-        btnLevelSelect.style.display = 'none';
-        btnSandboxToggle.style.display = 'none';
-        game.startEndlessMode();
-      } else if (mode === 'chaos') {
-        btnLevelSelect.style.display = 'none';
-        btnSandboxToggle.style.display = 'none';
-        game.startChaosMode();
-      } else if (mode === 'sandbox') {
-        btnLevelSelect.style.display = 'none';
-        btnSandboxToggle.style.display = 'flex';
-        sandboxTray.classList.add('open');
-        game.startSandboxMode();
-      }
-    });
-  });
-
   btnAudioToggle.addEventListener('click', () => {
     const muted = soundEngine.toggleMute();
     btnAudioToggle.innerHTML = muted ? '🔇' : '🔊';
@@ -571,69 +438,23 @@ function setupEventListeners() {
   btnCloseLeaderboard.addEventListener('click', () => modalLeaderboard.classList.remove('show'));
 
   btnClearScores.addEventListener('click', () => {
-    if (confirm('Are you sure you want to reset all high score records?')) {
+    if (confirm('Are you sure you want to reset your local high score cache?')) {
       game.clearHighScores();
       renderLeaderboard();
     }
   });
 
-  leaderboardFilterTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      leaderboardFilterTabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      currentLeaderboardFilter = tab.dataset.filter;
-      renderLeaderboard();
-    });
-  });
-
   btnLevelSelect.addEventListener('click', openLevelSelectModal);
   btnCloseLevels.addEventListener('click', () => modalLevels.classList.remove('show'));
 
-  btnSandboxToggle.addEventListener('click', () => {
-    sandboxTray.classList.toggle('open');
-  });
-
-  sliderCount.addEventListener('input', (e) => {
-    valCount.textContent = e.target.value;
-    game.sandboxConfig.particleCount = parseInt(e.target.value, 10);
-  });
-  sliderRadius.addEventListener('input', (e) => {
-    valRadius.textContent = `${e.target.value}px`;
-    game.sandboxConfig.baseRadius = parseInt(e.target.value, 10);
-  });
-  sliderDuration.addEventListener('input', (e) => {
-    valDuration.textContent = `${parseFloat(e.target.value).toFixed(1)}s`;
-    game.sandboxConfig.baseDuration = parseFloat(e.target.value);
-  });
-  sliderSpeed.addEventListener('input', (e) => {
-    valSpeed.textContent = `${parseFloat(e.target.value).toFixed(1)}x`;
-    game.sandboxConfig.particleSpeed = parseFloat(e.target.value) * 1.5;
-  });
-
-  btnApplySandbox.addEventListener('click', () => {
-    game.startSandboxMode();
-  });
-
   btnRestart.addEventListener('click', () => {
-    if (game.mode === 'campaign') {
-      game.startCampaignLevel(game.currentLevelIndex);
-    } else if (game.mode === 'endless') {
-      game.startEndlessMode();
-    } else if (game.mode === 'chaos') {
-      game.startChaosMode();
-    } else if (game.mode === 'sandbox') {
-      game.startSandboxMode();
-    }
+    game.startCampaignLevel(game.currentLevelIndex);
   });
 
   btnModalRetry.addEventListener('click', () => {
     commitPendingHighScore();
     modalResult.classList.remove('show');
-    if (game.mode === 'campaign') {
-      game.startCampaignLevel(game.currentLevelIndex);
-    } else if (game.mode === 'chaos') {
-      game.startChaosMode();
-    }
+    game.startCampaignLevel(game.currentLevelIndex);
   });
 
   btnModalNext.addEventListener('click', () => {

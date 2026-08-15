@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Chain Reaction — Geometry Wars Cascade</title>
+  <title>GeoChain — Geometry Wars Cascade</title>
   <meta name="description" content="A hypnotic geometric cascade game with organic pentatonic audio, shape-conforming explosions, and dynamic scoring.">
   
   <!-- Modern Typography -->
@@ -23,22 +23,13 @@
     <header class="app-header">
       <div class="brand-section">
         <div class="brand-logo-polygon"></div>
-        <span class="brand-title">Chain Reaction</span>
+        <span class="brand-title">GeoChain</span>
       </div>
-
-      <!-- Mode Selector Tabs -->
-      <nav class="mode-pill-tabs" aria-label="Game Modes">
-        <button class="mode-tab-btn active" data-mode="campaign">Campaign</button>
-        <button class="mode-tab-btn" data-mode="endless">Endless Zen</button>
-        <button class="mode-tab-btn" data-mode="chaos">Chaos</button>
-        <button class="mode-tab-btn" data-mode="sandbox">Sandbox Lab</button>
-      </nav>
 
       <!-- Right Action Controls -->
       <div class="header-controls">
         <button id="btn-leaderboard" class="icon-btn" title="Hall of Fame" aria-label="Open Hall of Fame">🏆</button>
         <button id="btn-level-select" class="icon-btn" title="Level Map" aria-label="Choose Campaign Level">🗺️</button>
-        <button id="btn-sandbox-toggle" class="icon-btn" title="Sandbox Controls" style="display: none;" aria-label="Sandbox Settings">⚙️</button>
         <button id="btn-audio-toggle" class="icon-btn" title="Toggle Sound" aria-label="Toggle Sound Effects">🔊</button>
       </div>
     </header>
@@ -69,7 +60,7 @@
         </div>
       </div>
 
-      <!-- Trigger Charges / Timer / Energy -->
+      <!-- Trigger Charges / Sparks -->
       <div class="hud-stat-group">
         <span class="hud-stat-label">Sparks</span>
         <span id="hud-charges-value" class="hud-stat-value highlight-amber">1</span>
@@ -92,52 +83,6 @@
       <!-- Quick Reset Button -->
       <button id="btn-restart" class="hud-btn" title="Restart Current Board">↺ Restart</button>
     </footer>
-
-    <!-- Sandbox Configuration Tray / Drawer -->
-    <aside id="sandbox-tray" class="sandbox-tray">
-      <div class="sandbox-header">
-        <h2 class="sandbox-title">Geometry Lab & Spawner</h2>
-      </div>
-
-      <div class="sandbox-control-group">
-        <div class="control-label-row">
-          <span>Geometries</span>
-          <span id="val-particle-count">36</span>
-        </div>
-        <input id="slider-particle-count" class="control-slider" type="range" min="10" max="100" value="36" step="2">
-      </div>
-
-      <div class="sandbox-control-group">
-        <div class="control-label-row">
-          <span>Blast Radius</span>
-          <span id="val-blast-radius">65px</span>
-        </div>
-        <input id="slider-blast-radius" class="control-slider" type="range" min="30" max="130" value="65" step="5">
-      </div>
-
-      <div class="sandbox-control-group">
-        <div class="control-label-row">
-          <span>Blast Duration</span>
-          <span id="val-blast-duration">2.8s</span>
-        </div>
-        <input id="slider-blast-duration" class="control-slider" type="range" min="1.0" max="5.0" value="2.8" step="0.2">
-      </div>
-
-      <div class="sandbox-control-group">
-        <div class="control-label-row">
-          <span>Speed Factor</span>
-          <span id="val-particle-speed">1.5x</span>
-        </div>
-        <input id="slider-particle-speed" class="control-slider" type="range" min="0.5" max="3.5" value="1.5" step="0.1">
-      </div>
-
-      <div class="sandbox-control-group">
-        <span class="control-label-row">Active Platonic Shapes</span>
-        <div id="particle-chips-container" class="particle-toggle-list"></div>
-      </div>
-
-      <button id="btn-apply-sandbox" class="hud-btn primary" style="width: 100%; margin-top: 6px;">Respawn Field</button>
-    </aside>
 
     <!-- Modal: Round Results with Level Top 10 Comparison -->
     <div id="modal-result" class="modal-backdrop">
@@ -197,7 +142,7 @@
           <!-- Right: Level Top 10 Comparison Table -->
           <div class="leaderboard-column">
             <div class="column-header-row">
-              <h3 id="level-leaderboard-title" class="column-subtitle">Level 1 Top 10</h3>
+              <h3 id="level-leaderboard-title" class="column-subtitle">Level 1 Top 10 (Global)</h3>
               <span id="player-rank-tag" class="player-rank-pill">Your Rank: #3</span>
             </div>
             
@@ -248,14 +193,7 @@
             <span class="trophy-icon">🏆</span>
             <h2 class="modal-title" style="margin: 0;">Hall of Fame</h2>
           </div>
-          <p class="modal-desc" style="margin-bottom: 12px;">Top High Score Records</p>
-        </div>
-
-        <!-- High Score Filter Pills -->
-        <div class="leaderboard-filter-tabs">
-          <button class="filter-tab active" data-filter="all">Global Top 10</button>
-          <button class="filter-tab" data-filter="Campaign">Campaign</button>
-          <button class="filter-tab" data-filter="Chaos">Chaos</button>
+          <p class="modal-desc" style="margin-bottom: 12px;">Global High Score Records</p>
         </div>
 
         <!-- High Scores Table -->
@@ -265,7 +203,6 @@
               <tr>
                 <th style="width: 48px;">Rank</th>
                 <th style="width: 70px;">Tag</th>
-                <th>Mode</th>
                 <th>Stage</th>
                 <th>Chain</th>
                 <th style="text-align: right;">Score</th>
@@ -278,13 +215,14 @@
         </div>
 
         <div class="modal-actions" style="margin-top: 18px;">
-          <button id="btn-clear-scores" class="hud-btn" style="color: var(--text-muted); font-size: 0.8rem;">Reset Records</button>
+          <button id="btn-clear-scores" class="hud-btn" style="color: var(--text-muted); font-size: 0.8rem;">Reset Local Cache</button>
           <button id="btn-close-leaderboard" class="hud-btn primary">Close</button>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Entry Script -->
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

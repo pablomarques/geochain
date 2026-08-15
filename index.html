@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Chain Reaction — Geometry Wars Cascade</title>
+  <meta name="description" content="A hypnotic geometric cascade game with organic pentatonic audio, shape-conforming explosions, and dynamic scoring.">
+  
+  <!-- Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div id="app-root">
+    <!-- Main Interactive Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Top App Navigation -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="brand-logo-polygon"></div>
+        <span class="brand-title">Chain Reaction</span>
+      </div>
+
+      <!-- Mode Selector Tabs -->
+      <nav class="mode-pill-tabs" aria-label="Game Modes">
+        <button class="mode-tab-btn active" data-mode="campaign">Campaign</button>
+        <button class="mode-tab-btn" data-mode="endless">Endless Zen</button>
+        <button class="mode-tab-btn" data-mode="chaos">Chaos</button>
+        <button class="mode-tab-btn" data-mode="sandbox">Sandbox Lab</button>
+      </nav>
+
+      <!-- Right Action Controls -->
+      <div class="header-controls">
+        <button id="btn-leaderboard" class="icon-btn" title="Hall of Fame" aria-label="Open Hall of Fame">🏆</button>
+        <button id="btn-level-select" class="icon-btn" title="Level Map" aria-label="Choose Campaign Level">🗺️</button>
+        <button id="btn-sandbox-toggle" class="icon-btn" title="Sandbox Controls" style="display: none;" aria-label="Sandbox Settings">⚙️</button>
+        <button id="btn-audio-toggle" class="icon-btn" title="Toggle Sound" aria-label="Toggle Sound Effects">🔊</button>
+      </div>
+    </header>
+
+    <!-- Contextual Tip / Hint Banner -->
+    <div id="hint-banner" class="hint-banner">
+      Click inside the arena to initiate reaction spark.
+    </div>
+
+    <!-- HUD Overlay Bar -->
+    <footer class="hud-container" aria-label="Game Status Bar">
+      <!-- Campaign Level Info -->
+      <div id="hud-level-group" class="hud-stat-group">
+        <span class="hud-stat-label">Level</span>
+        <span id="hud-level-value" class="hud-stat-value highlight-cyan">1</span>
+      </div>
+
+      <div class="hud-divider"></div>
+
+      <!-- Quota Meter (Campaign Mode) -->
+      <div id="hud-quota-container" class="quota-progress-container">
+        <div class="quota-progress-header">
+          <span>Quota</span>
+          <span><span id="hud-quota-current">0</span> / <span id="hud-quota-target">1</span></span>
+        </div>
+        <div class="quota-progress-track">
+          <div id="hud-quota-fill" class="quota-progress-fill"></div>
+        </div>
+      </div>
+
+      <!-- Trigger Charges / Timer / Energy -->
+      <div class="hud-stat-group">
+        <span class="hud-stat-label">Sparks</span>
+        <span id="hud-charges-value" class="hud-stat-value highlight-amber">1</span>
+      </div>
+
+      <div class="hud-divider"></div>
+
+      <!-- Score Stat -->
+      <div class="hud-stat-group">
+        <span class="hud-stat-label">Score</span>
+        <span id="hud-score-value" class="hud-stat-value">0</span>
+      </div>
+
+      <!-- Combo Stat -->
+      <div class="hud-stat-group">
+        <span class="hud-stat-label">Chain</span>
+        <span id="hud-combo-value" class="hud-stat-value highlight-emerald">x0</span>
+      </div>
+
+      <!-- Quick Reset Button -->
+      <button id="btn-restart" class="hud-btn" title="Restart Current Board">↺ Restart</button>
+    </footer>
+
+    <!-- Sandbox Configuration Tray / Drawer -->
+    <aside id="sandbox-tray" class="sandbox-tray">
+      <div class="sandbox-header">
+        <h2 class="sandbox-title">Geometry Lab & Spawner</h2>
+      </div>
+
+      <div class="sandbox-control-group">
+        <div class="control-label-row">
+          <span>Geometries</span>
+          <span id="val-particle-count">36</span>
+        </div>
+        <input id="slider-particle-count" class="control-slider" type="range" min="10" max="100" value="36" step="2">
+      </div>
+
+      <div class="sandbox-control-group">
+        <div class="control-label-row">
+          <span>Blast Radius</span>
+          <span id="val-blast-radius">65px</span>
+        </div>
+        <input id="slider-blast-radius" class="control-slider" type="range" min="30" max="130" value="65" step="5">
+      </div>
+
+      <div class="sandbox-control-group">
+        <div class="control-label-row">
+          <span>Blast Duration</span>
+          <span id="val-blast-duration">2.8s</span>
+        </div>
+        <input id="slider-blast-duration" class="control-slider" type="range" min="1.0" max="5.0" value="2.8" step="0.2">
+      </div>
+
+      <div class="sandbox-control-group">
+        <div class="control-label-row">
+          <span>Speed Factor</span>
+          <span id="val-particle-speed">1.5x</span>
+        </div>
+        <input id="slider-particle-speed" class="control-slider" type="range" min="0.5" max="3.5" value="1.5" step="0.1">
+      </div>
+
+      <div class="sandbox-control-group">
+        <span class="control-label-row">Active Platonic Shapes</span>
+        <div id="particle-chips-container" class="particle-toggle-list"></div>
+      </div>
+
+      <button id="btn-apply-sandbox" class="hud-btn primary" style="width: 100%; margin-top: 6px;">Respawn Field</button>
+    </aside>
+
+    <!-- Modal: Round Results with Level Top 10 Comparison -->
+    <div id="modal-result" class="modal-backdrop">
+      <div class="modal-card modal-card-wide">
+        <!-- Result Header -->
+        <div class="result-header-row">
+          <div id="modal-result-icon" class="modal-icon-badge success">✓</div>
+          <div class="result-header-text">
+            <h2 id="modal-result-title" class="modal-title">Level Cleared!</h2>
+            <p id="modal-result-desc" class="modal-desc">Incredible geometric chain reaction!</p>
+          </div>
+          <!-- Star Rating -->
+          <div id="modal-stars-container" class="stars-rating-container">
+            <span>★</span><span>★</span><span>★</span>
+          </div>
+        </div>
+
+        <!-- Result Content Split View -->
+        <div class="result-body-split">
+          <!-- Left: Scorecard Breakdown -->
+          <div class="scorecard-column">
+            <h3 class="column-subtitle">Performance Stats</h3>
+            <div class="modal-stats-table">
+              <div class="modal-stat-row">
+                <span class="stat-name">Bodies Popped</span>
+                <span id="modal-stat-exploded" class="stat-value">0 / 0</span>
+              </div>
+              <div class="modal-stat-row">
+                <span class="stat-name">Longest Chain</span>
+                <span id="modal-stat-combo" class="stat-value">x0</span>
+              </div>
+              <div id="modal-row-speed" class="modal-stat-row" style="display: none;">
+                <span class="stat-name">Speed Bonus</span>
+                <span id="modal-stat-speed" class="stat-value highlight-cyan">--</span>
+              </div>
+              <div id="modal-row-bonus" class="modal-stat-row" style="display: none;">
+                <span class="stat-name">Spare Sparks</span>
+                <span id="modal-stat-bonus" class="stat-value highlight-amber">--</span>
+              </div>
+              <div class="modal-divider"></div>
+              <div class="modal-stat-row total">
+                <span class="stat-name">Final Score</span>
+                <span id="modal-stat-score" class="stat-value highlight-emerald">0</span>
+              </div>
+            </div>
+
+            <!-- New Record Tag Input -->
+            <div id="high-score-banner" class="high-score-banner" style="display: none;">
+              <span id="high-score-text">⭐ NEW TOP 10 RECORD! ⭐</span>
+              <div class="initials-entry-row">
+                <label for="player-initials-input">ARCADE TAG:</label>
+                <input id="player-initials-input" class="initials-input" type="text" maxlength="4" value="ACE">
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Level Top 10 Comparison Table -->
+          <div class="leaderboard-column">
+            <div class="column-header-row">
+              <h3 id="level-leaderboard-title" class="column-subtitle">Level 1 Top 10</h3>
+              <span id="player-rank-tag" class="player-rank-pill">Your Rank: #3</span>
+            </div>
+            
+            <div class="level-top10-container">
+              <table class="level-top10-table">
+                <thead>
+                  <tr>
+                    <th style="width: 44px;">Rank</th>
+                    <th style="width: 65px;">Tag</th>
+                    <th>Chain</th>
+                    <th style="text-align: right;">Score</th>
+                  </tr>
+                </thead>
+                <tbody id="level-top10-rows">
+                  <!-- Dynamically populated with Top 10 + Player's score highlighted -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Actions -->
+        <div class="modal-actions" style="margin-top: 20px;">
+          <button id="btn-modal-levels" class="hud-btn">Levels</button>
+          <button id="btn-modal-retry" class="hud-btn">Retry</button>
+          <button id="btn-modal-next" class="hud-btn primary">Next Level →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Campaign Level Selector -->
+    <div id="modal-levels" class="modal-backdrop">
+      <div class="modal-card" style="width: 520px;">
+        <h2 class="modal-title">Campaign Map</h2>
+        <p class="modal-desc">Select a stage to initiate geometric cascade test.</p>
+
+        <div id="levels-grid" class="level-grid"></div>
+
+        <button id="btn-close-levels" class="hud-btn" style="width: 100%;">Close</button>
+      </div>
+    </div>
+
+    <!-- Modal: Top 10 High Scores Leaderboard -->
+    <div id="modal-leaderboard" class="modal-backdrop">
+      <div class="modal-card" style="width: 580px;">
+        <div class="leaderboard-header">
+          <div class="leaderboard-title-group">
+            <span class="trophy-icon">🏆</span>
+            <h2 class="modal-title" style="margin: 0;">Hall of Fame</h2>
+          </div>
+          <p class="modal-desc" style="margin-bottom: 12px;">Top High Score Records</p>
+        </div>
+
+        <!-- High Score Filter Pills -->
+        <div class="leaderboard-filter-tabs">
+          <button class="filter-tab active" data-filter="all">Global Top 10</button>
+          <button class="filter-tab" data-filter="Campaign">Campaign</button>
+          <button class="filter-tab" data-filter="Chaos">Chaos</button>
+        </div>
+
+        <!-- High Scores Table -->
+        <div class="leaderboard-table-container">
+          <table class="leaderboard-table">
+            <thead>
+              <tr>
+                <th style="width: 48px;">Rank</th>
+                <th style="width: 70px;">Tag</th>
+                <th>Mode</th>
+                <th>Stage</th>
+                <th>Chain</th>
+                <th style="text-align: right;">Score</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboard-rows">
+              <!-- Dynamically populated rows -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 18px;">
+          <button id="btn-clear-scores" class="hud-btn" style="color: var(--text-muted); font-size: 0.8rem;">Reset Records</button>
+          <button id="btn-close-leaderboard" class="hud-btn primary">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

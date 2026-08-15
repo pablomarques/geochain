@@ -1,0 +1,21 @@
+{
+  "name": "geochain",
+  "version": "1.0.0",
+  "description": "A hypnotic geometric cascade game with elastic spacetime physics, pentatonic audio, and dynamic scoring.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "game",
+    "canvas",
+    "geometry-wars",
+    "chain-reaction",
+    "boomshine",
+    "web-audio"
+  ],
+  "author": "Pablo Marques",
+  "license": "MIT"
+}

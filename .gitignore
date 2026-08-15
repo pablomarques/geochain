@@ -1,0 +1,21 @@
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Node & Build Outputs
+node_modules/
+dist/
+build/
+.cache/
+
+# Environment & Vercel
+.env
+.env.local
+.env.*.local
+.vercel
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

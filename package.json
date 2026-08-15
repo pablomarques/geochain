@@ -5,8 +5,8 @@
   "description": "A hypnotic geometric cascade game with elastic spacetime physics, pentatonic audio, and dynamic scoring.",
   "type": "module",
   "scripts": {
-    "dev": "node server.js",
-    "start": "node server.js"
+    "dev": "node scripts/server.js",
+    "start": "node scripts/server.js"
   },
   "keywords": [
     "game",

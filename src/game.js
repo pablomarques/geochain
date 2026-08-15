@@ -3,6 +3,7 @@ import { Explosion, SparklePool } from './explosion.js';
 import { ElasticSpacetimeGrid } from './grid.js';
 import { CAMPAIGN_LEVELS } from './levels.js';
 import { soundEngine } from './audio.js';
+import { cloudLeaderboard } from './leaderboard.js';
 
 export class FloatingText {
   constructor(x, y, text, color = '#ffffff', fontSize = 16, isCombo = false) {
@@ -76,7 +77,7 @@ export class ChainReactionGame {
     this.unlockedLevel = parseInt(localStorage.getItem('cr_unlocked_level') || '1', 10);
     this.levelStars = JSON.parse(localStorage.getItem('cr_level_stars') || '{}');
 
-    // High Scores
+    // High Scores & Cloud Sync
     this.levelHighScores = this.loadLevelHighScores();
     this.highScores = this.loadGlobalHighScores();
 
@@ -133,9 +134,7 @@ export class ChainReactionGame {
   loadLevelHighScores() {
     try {
       const stored = localStorage.getItem('cr_level_high_scores');
-      if (stored) {
-        return JSON.parse(stored);
-      }
+      if (stored) return JSON.parse(stored);
     } catch (e) {
       console.error(e);
     }
@@ -199,9 +198,10 @@ export class ChainReactionGame {
   addLevelHighScore(lvlNum, name, score, combo) {
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const list = this.getLevelTop10(lvlNum);
+    const tag = (name || 'ACE').substring(0, 4).toUpperCase();
     
     const entry = {
-      name: (name || 'ACE').substring(0, 4).toUpperCase(),
+      name: tag,
       score,
       combo,
       date: dateStr
@@ -212,7 +212,10 @@ export class ChainReactionGame {
     this.levelHighScores[lvlNum] = list.slice(0, 10);
     this.saveLevelHighScores();
 
-    this.addGlobalHighScore(name, score, 'Campaign', lvlNum, combo);
+    this.addGlobalHighScore(tag, score, 'Campaign', lvlNum, combo);
+
+    // Sync to Persistent Cloud Database
+    cloudLeaderboard.submitScore(tag, score, combo, lvlNum, 'Campaign');
   }
 
   loadGlobalHighScores() {
@@ -241,8 +244,9 @@ export class ChainReactionGame {
 
   addGlobalHighScore(name, score, mode, level, combo) {
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const tag = (name || 'ACE').substring(0, 4).toUpperCase();
     const entry = {
-      name: (name || 'ACE').substring(0, 4).toUpperCase(),
+      name: tag,
       score,
       mode: mode.charAt(0).toUpperCase() + mode.slice(1),
       level: mode === 'Campaign' ? level : 1,

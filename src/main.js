@@ -2,6 +2,7 @@ import { ChainReactionGame } from './game.js';
 import { CAMPAIGN_LEVELS } from './levels.js';
 import { PARTICLE_TYPES } from './particles.js';
 import { soundEngine } from './audio.js';
+import { cloudLeaderboard } from './leaderboard.js';
 
 // DOM Elements
 const canvas = document.getElementById('game-canvas');
@@ -177,7 +178,7 @@ function handleGameStateChange(data) {
 
 // Render Level Top 10 Comparison Table in Scorecard
 function renderLevelComparisonTable(comparison, playerTag = 'ACE') {
-  levelLeaderboardTitle.textContent = `Level ${comparison.level} Top 10`;
+  levelLeaderboardTitle.textContent = `Level ${comparison.level} Top 10 (Global)`;
   levelTop10Rows.innerHTML = '';
 
   const { rank, qualifies, top10, score, combo } = comparison;
@@ -249,7 +250,7 @@ function renderLevelComparisonTable(comparison, playerTag = 'ACE') {
   }
 }
 
-function handleLevelComplete(result) {
+async function handleLevelComplete(result) {
   modalResult.classList.add('show');
   
   if (result.success) {
@@ -304,7 +305,7 @@ function handleLevelComplete(result) {
   const savedTag = localStorage.getItem('cr_player_tag') || 'ACE';
   playerInitialsInput.value = savedTag;
 
-  // Render Level Top 10 Comparison
+  // 1. Render Local Level Top 10 Comparison immediately
   if (result.levelComparison) {
     renderLevelComparisonTable(result.levelComparison, savedTag);
 
@@ -320,6 +321,25 @@ function handleLevelComplete(result) {
       highScoreBanner.style.display = 'none';
       pendingHighScore = null;
     }
+  }
+
+  // 2. Fetch Live Cloud Level Scores in background and refresh
+  try {
+    const cloudScores = await cloudLeaderboard.fetchLevelTop10(result.level);
+    if (cloudScores && cloudScores.length > 0) {
+      let rank = cloudScores.filter(item => item.score >= result.score).length + 1;
+      const cloudComp = {
+        level: result.level,
+        score: result.score,
+        combo: game.highestCombo,
+        rank,
+        qualifies: rank <= 10,
+        top10: cloudScores
+      };
+      renderLevelComparisonTable(cloudComp, savedTag);
+    }
+  } catch (e) {
+    console.warn(e);
   }
 }
 
@@ -365,45 +385,61 @@ function commitPendingHighScore() {
   }
 }
 
-// Global Leaderboard Rendering
-function renderLeaderboard() {
+// Global Leaderboard Rendering with Cloud Synchronization
+async function renderLeaderboard() {
   leaderboardRows.innerHTML = '';
+  
+  // 1. Render Local / Cached scores first for instant responsiveness
   let scores = game.highScores || [];
-
   if (currentLeaderboardFilter !== 'all') {
     scores = scores.filter(s => s.mode.toLowerCase() === currentLeaderboardFilter.toLowerCase());
   }
 
-  if (scores.length === 0) {
-    leaderboardRows.innerHTML = `
-      <tr>
-        <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">
-          No records found in this category yet.
-        </td>
-      </tr>
-    `;
-    return;
+  const renderRows = (list) => {
+    leaderboardRows.innerHTML = '';
+    if (list.length === 0) {
+      leaderboardRows.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">
+            No records found in this category yet.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    list.forEach((entry, idx) => {
+      const tr = document.createElement('tr');
+      const rank = idx + 1;
+      let rankBadge = `${rank}`;
+      if (rank === 1) rankBadge = `<span class="rank-badge gold">#1</span>`;
+      else if (rank === 2) rankBadge = `<span class="rank-badge silver">#2</span>`;
+      else if (rank === 3) rankBadge = `<span class="rank-badge bronze">#3</span>`;
+      else rankBadge = `<span class="rank-badge other">#${rank}</span>`;
+
+      tr.innerHTML = `
+        <td>${rankBadge}</td>
+        <td class="tag-cell">${entry.name}</td>
+        <td><span class="mode-tag ${(entry.mode || 'Campaign').toLowerCase()}">${entry.mode || 'Campaign'}</span></td>
+        <td>${entry.mode === 'Campaign' ? `Lvl ${entry.level}` : '-'}</td>
+        <td style="color: var(--accent-emerald); font-weight: 700;">x${entry.combo}</td>
+        <td class="score-cell">${entry.score.toLocaleString()}</td>
+      `;
+      leaderboardRows.appendChild(tr);
+    });
+  };
+
+  renderRows(scores);
+
+  // 2. Fetch Live Global Cloud Records from Supabase
+  try {
+    const cloudScores = await cloudLeaderboard.fetchGlobalTop10(currentLeaderboardFilter);
+    if (cloudScores && cloudScores.length > 0) {
+      renderRows(cloudScores);
+    }
+  } catch (err) {
+    console.warn('Cloud leaderboard refresh error:', err);
   }
-
-  scores.forEach((entry, idx) => {
-    const tr = document.createElement('tr');
-    const rank = idx + 1;
-    let rankBadge = `${rank}`;
-    if (rank === 1) rankBadge = `<span class="rank-badge gold">#1</span>`;
-    else if (rank === 2) rankBadge = `<span class="rank-badge silver">#2</span>`;
-    else if (rank === 3) rankBadge = `<span class="rank-badge bronze">#3</span>`;
-    else rankBadge = `<span class="rank-badge other">#${rank}</span>`;
-
-    tr.innerHTML = `
-      <td>${rankBadge}</td>
-      <td class="tag-cell">${entry.name}</td>
-      <td><span class="mode-tag ${entry.mode.toLowerCase()}">${entry.mode}</span></td>
-      <td>${entry.mode === 'Campaign' ? `Lvl ${entry.level}` : '-'}</td>
-      <td style="color: var(--accent-emerald); font-weight: 700;">x${entry.combo}</td>
-      <td class="score-cell">${entry.score.toLocaleString()}</td>
-    `;
-    leaderboardRows.appendChild(tr);
-  });
 }
 
 function openLeaderboardModal() {

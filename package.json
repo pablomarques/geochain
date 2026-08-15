@@ -2,19 +2,13 @@
   "name": "geochain",
   "version": "1.0.0",
   "private": true,
-  "description": "A hypnotic geometric cascade game with elastic spacetime physics, pentatonic audio, and dynamic scoring.",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/server.js",
-    "start": "node scripts/server.js"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
-  "keywords": [
-    "game",
-    "canvas",
-    "geometry-wars",
-    "chain-reaction",
-    "web-audio"
-  ],
-  "author": "Pablo Marques",
-  "license": "MIT"
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
 }

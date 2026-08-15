@@ -1,11 +1,4 @@
 {
-  "version": 2,
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache" }
-      ]
-    }
-  ]
+  "buildCommand": "vite build",
+  "outputDirectory": "dist"
 }

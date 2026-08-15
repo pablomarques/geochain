@@ -92,6 +92,12 @@ html, body {
   pointer-events: auto;
 }
 
+.header-left-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .brand-section {
   display: flex;
   align-items: center;
@@ -119,6 +125,42 @@ html, body {
   background: linear-gradient(135deg, #ffffff 40%, var(--accent-cyan));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+/* Campaign Selector Pill Button */
+.campaign-pill-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--bg-card-border);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  box-shadow: var(--shadow-glow);
+  transition: all 0.2s ease;
+}
+
+.campaign-pill-btn:hover {
+  border-color: var(--accent-cyan);
+  background: rgba(56, 189, 248, 0.15);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
+  transform: translateY(-1px);
+}
+
+.dropdown-chevron {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.campaign-pill-btn:hover .dropdown-chevron {
+  color: var(--accent-cyan);
 }
 
 .header-controls {
@@ -318,8 +360,8 @@ html, body {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(3, 7, 18, 0.8);
-  backdrop-filter: blur(12px);
+  background: rgba(3, 7, 18, 0.82);
+  backdrop-filter: blur(14px);
   z-index: 50;
   display: flex;
   align-items: center;
@@ -354,6 +396,11 @@ html, body {
 
 .modal-card-wide {
   width: 620px;
+}
+
+.modal-header-centered {
+  text-align: center;
+  margin-bottom: 18px;
 }
 
 .result-header-row {
@@ -632,6 +679,132 @@ html, body {
   width: 100%;
 }
 
+/* ==========================================================================
+   Campaign Vault Selector Modal Cards
+   ========================================================================== */
+
+.campaign-cards-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.campaign-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.campaign-card:hover:not(.locked) {
+  background: rgba(56, 189, 248, 0.12);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+  transform: translateY(-2px);
+}
+
+.campaign-card.active {
+  border-color: var(--accent-cyan);
+  background: rgba(56, 189, 248, 0.16);
+  box-shadow: 0 0 22px rgba(56, 189, 248, 0.4);
+}
+
+.campaign-card.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.6);
+}
+
+.campaign-card-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.campaign-badge-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  flex-shrink: 0;
+}
+
+.campaign-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.campaign-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.campaign-card-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.campaign-active-pill {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-cyan);
+  color: #030712;
+}
+
+.campaign-card-tagline {
+  font-size: 0.78rem;
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+
+.campaign-card-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  max-width: 320px;
+  line-height: 1.35;
+}
+
+.campaign-card-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.campaign-progress-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+}
+
+.campaign-stages-count {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
 /* Level Select Grid */
 .level-grid {
   display: grid;
@@ -737,4 +910,6 @@ html, body {
   }
   .modal-card-wide { width: 94vw; }
   .level-top10-container { height: 140px; }
+  .campaign-card-desc { display: none; }
+  .campaign-card { padding: 12px; }
 }

@@ -1,11 +1,19 @@
 import { ChainReactionGame } from './game.js';
-import { CAMPAIGN_LEVELS } from './levels.js';
+import { CAMPAIGNS } from './levels.js';
 import { soundEngine } from './audio.js';
 import { cloudLeaderboard } from './leaderboard.js';
 
 // DOM Elements
 const canvas = document.getElementById('game-canvas');
 const hintBanner = document.getElementById('hint-banner');
+
+// Header Elements
+const headerCampaignBadge = document.getElementById('header-campaign-badge');
+const headerCampaignTitle = document.getElementById('header-campaign-title');
+const btnCampaignSelect = document.getElementById('btn-campaign-select');
+const btnAudioToggle = document.getElementById('btn-audio-toggle');
+const btnLevelSelect = document.getElementById('btn-level-select');
+const btnLeaderboard = document.getElementById('btn-leaderboard');
 
 // HUD Elements
 const hudLevelGroup = document.getElementById('hud-level-group');
@@ -18,11 +26,6 @@ const hudQuotaCurrent = document.getElementById('hud-quota-current');
 const hudQuotaTarget = document.getElementById('hud-quota-target');
 const hudQuotaContainer = document.getElementById('hud-quota-container');
 const btnRestart = document.getElementById('btn-restart');
-
-// Header Buttons
-const btnAudioToggle = document.getElementById('btn-audio-toggle');
-const btnLevelSelect = document.getElementById('btn-level-select');
-const btnLeaderboard = document.getElementById('btn-leaderboard');
 
 // Round Result Modal Elements
 const modalResult = document.getElementById('modal-result');
@@ -50,10 +53,18 @@ const btnModalRetry = document.getElementById('btn-modal-retry');
 const btnModalNext = document.getElementById('btn-modal-next');
 const btnModalLevels = document.getElementById('btn-modal-levels');
 
-// Campaign Level Selector Modal
+// Campaign Vault Modal Elements
+const modalCampaigns = document.getElementById('modal-campaigns');
+const campaignCardsGrid = document.getElementById('campaign-cards-grid');
+const btnCloseCampaigns = document.getElementById('btn-close-campaigns');
+
+// Campaign Level Selector Modal Elements
 const modalLevels = document.getElementById('modal-levels');
+const levelsModalCampaignTitle = document.getElementById('levels-modal-campaign-title');
+const levelsModalCampaignDesc = document.getElementById('levels-modal-campaign-desc');
 const levelsGrid = document.getElementById('levels-grid');
 const btnCloseLevels = document.getElementById('btn-close-levels');
+const btnSwitchCampaignFromMap = document.getElementById('btn-switch-campaign-from-map');
 
 // Hall of Fame Leaderboard Modal
 const modalLeaderboard = document.getElementById('modal-leaderboard');
@@ -111,6 +122,9 @@ function gameLoop(time) {
 }
 
 function handleGameStateChange(data) {
+  headerCampaignBadge.textContent = data.campaign.badge || '🌌';
+  headerCampaignTitle.textContent = data.campaign.title;
+
   hudScoreValue.textContent = data.score.toLocaleString();
   hudComboValue.textContent = `x${data.combo}`;
 
@@ -125,7 +139,8 @@ function handleGameStateChange(data) {
   const pct = Math.min(100, (data.exploded / data.target) * 100);
   hudQuotaFill.style.width = `${pct}%`;
 
-  const lvlConfig = CAMPAIGN_LEVELS[data.level - 1];
+  const levels = data.campaign.levels || [];
+  const lvlConfig = levels[data.level - 1];
   if (lvlConfig && data.state === 'ready') {
     const starT = lvlConfig.stars ? ` (3★ @ ${lvlConfig.stars[2]})` : '';
     const speedBadge = lvlConfig.speedLabel ? ` • Speed: ${lvlConfig.speedLabel}` : '';
@@ -154,7 +169,6 @@ function renderLevelComparisonTable(comparison, playerTag = 'ACE') {
     playerRankTag.textContent = `Rank: #${rank} (Unranked)`;
   }
 
-  // Create combined list showing placement
   const displayList = [...top10];
   const playerEntry = {
     name: playerTag,
@@ -317,7 +331,6 @@ function commitPendingHighScore() {
 async function renderLeaderboard() {
   leaderboardRows.innerHTML = '';
   
-  // 1. Render Local / Cached scores first for instant responsiveness
   let scores = game.highScores || [];
 
   const renderRows = (list) => {
@@ -355,7 +368,6 @@ async function renderLeaderboard() {
 
   renderRows(scores);
 
-  // 2. Fetch Live Global Cloud Records from Supabase
   try {
     const cloudScores = await cloudLeaderboard.fetchGlobalTop10('all');
     if (cloudScores && cloudScores.length > 0) {
@@ -371,12 +383,76 @@ function openLeaderboardModal() {
   modalLeaderboard.classList.add('show');
 }
 
+// Campaign Vault Rendering & Selection
+function openCampaignVaultModal() {
+  campaignCardsGrid.innerHTML = '';
+
+  CAMPAIGNS.forEach(campaign => {
+    const progress = game.getCampaignProgress(campaign.id);
+    const totalLevels = campaign.levels.length;
+    const isCurrent = campaign.id === game.currentCampaignId;
+    const isLocked = !!campaign.isComingSoon;
+
+    let earnedStars = 0;
+    if (progress && progress.levelStars) {
+      Object.values(progress.levelStars).forEach(s => { earnedStars += s; });
+    }
+    const maxStars = totalLevels * 3;
+
+    const card = document.createElement('div');
+    card.className = `campaign-card ${isCurrent ? 'active' : ''} ${isLocked ? 'locked' : ''}`;
+
+    card.innerHTML = `
+      <div class="campaign-card-left">
+        <div class="campaign-badge-icon" style="border-color: ${campaign.color || 'var(--accent-cyan)'};">
+          ${campaign.badge || '🌌'}
+        </div>
+        <div class="campaign-info">
+          <div class="campaign-card-title-row">
+            <span class="campaign-card-title">${campaign.title}</span>
+            ${isCurrent ? '<span class="campaign-active-pill">ACTIVE</span>' : ''}
+            ${isLocked ? '<span class="campaign-active-pill" style="background: var(--text-muted);">SOON</span>' : ''}
+          </div>
+          <span class="campaign-card-tagline" style="color: ${campaign.color || 'var(--accent-cyan)'};">${campaign.tagline}</span>
+          <p class="campaign-card-desc">${campaign.description}</p>
+        </div>
+      </div>
+      <div class="campaign-card-right">
+        ${!isLocked ? `
+          <span class="campaign-progress-badge">⭐ ${earnedStars} / ${maxStars}</span>
+          <span class="campaign-stages-count">${totalLevels} Calibrated Stages</span>
+        ` : `
+          <span class="campaign-stages-count" style="color: var(--text-muted);">In Calibration</span>
+        `}
+      </div>
+    `;
+
+    if (!isLocked) {
+      card.addEventListener('click', () => {
+        game.setCampaign(campaign.id);
+        modalCampaigns.classList.remove('show');
+        openLevelSelectModal();
+      });
+    }
+
+    campaignCardsGrid.appendChild(card);
+  });
+
+  modalCampaigns.classList.add('show');
+}
+
 function openLevelSelectModal() {
   levelsGrid.innerHTML = '';
-  const unlocked = game.unlockedLevel;
-  const starsMap = game.levelStars;
+  
+  const campaign = game.currentCampaign;
+  levelsModalCampaignTitle.textContent = `${campaign.badge || '🌌'} ${campaign.title}`;
+  levelsModalCampaignDesc.textContent = campaign.tagline || 'Select a stage to initiate geometric cascade test.';
 
-  CAMPAIGN_LEVELS.forEach((lvl, idx) => {
+  const progress = game.getCampaignProgress(campaign.id);
+  const unlocked = progress.unlockedLevel || 1;
+  const starsMap = progress.levelStars || {};
+
+  campaign.levels.forEach((lvl, idx) => {
     const isUnlocked = lvl.level <= unlocked;
     const isCurrent = idx === game.currentLevelIndex;
     const stars = starsMap[lvl.level] || 0;
@@ -432,6 +508,15 @@ function setupEventListeners() {
   btnAudioToggle.addEventListener('click', () => {
     const muted = soundEngine.toggleMute();
     btnAudioToggle.innerHTML = muted ? '🔇' : '🔊';
+  });
+
+  // Campaign Vault Listeners
+  btnCampaignSelect.addEventListener('click', openCampaignVaultModal);
+  btnCloseCampaigns.addEventListener('click', () => modalCampaigns.classList.remove('show'));
+
+  btnSwitchCampaignFromMap.addEventListener('click', () => {
+    modalLevels.classList.remove('show');
+    openCampaignVaultModal();
   });
 
   btnLeaderboard.addEventListener('click', openLeaderboardModal);

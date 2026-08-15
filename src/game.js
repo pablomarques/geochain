@@ -1,7 +1,7 @@
 import { Particle, Shrapnel, PARTICLE_TYPES, REFERENCE_ARENA } from './particles.js';
 import { Explosion, SparklePool } from './explosion.js';
 import { ElasticSpacetimeGrid } from './grid.js';
-import { CAMPAIGN_LEVELS } from './levels.js';
+import { CAMPAIGNS } from './levels.js';
 import { soundEngine } from './audio.js';
 import { cloudLeaderboard } from './leaderboard.js';
 
@@ -67,17 +67,18 @@ export class ChainReactionGame {
     this.scale = 1.0;
     this.calculateArenaBounds();
 
-    // Elastic Spacetime Grid with Proportional Scaling
+    // Elastic Spacetime Grid
     this.grid = new ElasticSpacetimeGrid(this.arena, 30, this.scale);
 
-    // Mode & State
-    this.mode = 'campaign';
+    // Campaigns & State
+    this.campaigns = CAMPAIGNS;
+    this.currentCampaignId = localStorage.getItem('cr_active_campaign_id') || 'genesis';
+    this.currentCampaign = this.campaigns.find(c => c.id === this.currentCampaignId) || this.campaigns[0];
+    this.currentLevelIndex = 0;
     this.state = 'ready';
 
-    // Campaign State
-    this.currentLevelIndex = 0;
-    this.unlockedLevel = parseInt(localStorage.getItem('cr_unlocked_level') || '1', 10);
-    this.levelStars = JSON.parse(localStorage.getItem('cr_level_stars') || '{}');
+    // Campaign Progress Map
+    this.campaignProgress = this.loadCampaignProgress();
 
     // High Scores & Cloud Sync
     this.levelHighScores = this.loadLevelHighScores();
@@ -94,27 +95,11 @@ export class ChainReactionGame {
     this.charges = 1;
     this.roundTimeElapsed = 0;
     this.isTimerRunning = false;
-    this.currentSpeedLabel = 'High Velocity (Easy)';
+    this.currentSpeedLabel = 'Normal';
 
     // Earned Sparks Milestones
     this.comboMilestones = [4, 8, 14, 22, 32, 45, 60];
     this.awardedMilestones = new Set();
-
-    // Endless Zen Stats
-    this.endlessEnergy = 100;
-    this.endlessEnergyRate = 20;
-
-    // Chaos Mode Stats
-    this.chaosTimeLeft = 25.0;
-
-    // Physics Configuration (Defined in 960x600 Reference Units)
-    this.sandboxConfig = {
-      particleCount: 36,
-      baseRadius: 65,
-      baseDuration: 2.8,
-      particleSpeed: 2.4,
-      enabledTypes: ['standard', 'mega', 'splitter', 'vortex', 'longburner', 'speedster', 'catalyst']
-    };
 
     // Pre-allocated High-Performance Sparkle Pool
     this.sparklePool = new SparklePool(450);
@@ -131,6 +116,52 @@ export class ChainReactionGame {
     this.shakeIntensity = 0;
 
     this.initAmbientMotes();
+  }
+
+  loadCampaignProgress() {
+    try {
+      const stored = localStorage.getItem('cr_campaign_progress');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return {
+      genesis: {
+        unlockedLevel: parseInt(localStorage.getItem('cr_unlocked_level') || '1', 10),
+        levelStars: JSON.parse(localStorage.getItem('cr_level_stars') || '{}')
+      }
+    };
+  }
+
+  saveCampaignProgress() {
+    try {
+      localStorage.setItem('cr_campaign_progress', JSON.stringify(this.campaignProgress));
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  getCampaignProgress(campaignId) {
+    if (!this.campaignProgress[campaignId]) {
+      this.campaignProgress[campaignId] = {
+        unlockedLevel: 1,
+        levelStars: {}
+      };
+      this.saveCampaignProgress();
+    }
+    return this.campaignProgress[campaignId];
+  }
+
+  setCampaign(campaignId) {
+    const found = this.campaigns.find(c => c.id === campaignId);
+    if (!found || found.isComingSoon) return false;
+
+    this.currentCampaignId = campaignId;
+    this.currentCampaign = found;
+    localStorage.setItem('cr_active_campaign_id', campaignId);
+    
+    this.startCampaignLevel(0);
+    return true;
   }
 
   loadLevelHighScores() {
@@ -214,7 +245,7 @@ export class ChainReactionGame {
     this.levelHighScores[lvlNum] = list.slice(0, 10);
     this.saveLevelHighScores();
 
-    this.addGlobalHighScore(tag, score, 'Campaign', lvlNum, combo);
+    this.addGlobalHighScore(tag, score, lvlNum, combo);
 
     // Sync to Persistent Cloud Database
     cloudLeaderboard.submitScore(tag, score, combo, lvlNum, 'Campaign');
@@ -228,11 +259,14 @@ export class ChainReactionGame {
       console.error(e);
     }
     return [
-      { name: 'ACE', score: 25000, mode: 'Campaign', level: 12, combo: 34, date: 'Aug 14' },
-      { name: 'NEO', score: 18500, mode: 'Campaign', level: 9, combo: 28, date: 'Aug 14' },
-      { name: 'VEX', score: 14200, mode: 'Chaos', level: 1, combo: 24, date: 'Aug 14' },
-      { name: 'ZEN', score: 11000, mode: 'Endless', level: 1, combo: 20, date: 'Aug 14' },
-      { name: 'ARC', score: 8500, mode: 'Campaign', level: 5, combo: 16, date: 'Aug 14' }
+      { name: 'ACE', score: 25000, level: 12, combo: 34, date: 'Aug 14' },
+      { name: 'NEO', score: 18500, level: 9, combo: 28, date: 'Aug 14' },
+      { name: 'FOX', score: 16200, level: 8, combo: 22, date: 'Aug 14' },
+      { name: 'VEX', score: 14200, level: 6, combo: 24, date: 'Aug 14' },
+      { name: 'RAY', score: 12400, level: 5, combo: 19, date: 'Aug 14' },
+      { name: 'ZEN', score: 11000, level: 3, combo: 20, date: 'Aug 14' },
+      { name: 'ION', score: 9800, level: 2, combo: 15, date: 'Aug 14' },
+      { name: 'ARC', score: 8500, level: 1, combo: 16, date: 'Aug 14' }
     ];
   }
 
@@ -244,14 +278,13 @@ export class ChainReactionGame {
     }
   }
 
-  addGlobalHighScore(name, score, mode, level, combo) {
+  addGlobalHighScore(name, score, level, combo) {
     const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     const tag = (name || 'ACE').substring(0, 4).toUpperCase();
     const entry = {
       name: tag,
       score,
-      mode: mode.charAt(0).toUpperCase() + mode.slice(1),
-      level: mode === 'Campaign' ? level : 1,
+      level,
       combo,
       date: dateStr
     };
@@ -288,7 +321,6 @@ export class ChainReactionGame {
       height: Math.round(arenaH)
     };
 
-    // Calculate Physical Scale Ratio Relative to Reference 960x600 Arena
     this.scale = this.arena.width / REFERENCE_ARENA.width;
   }
 
@@ -315,7 +347,6 @@ export class ChainReactionGame {
     
     this.calculateArenaBounds();
 
-    // Rescale All Entities and Spacetime Grid
     this.grid.resize(this.arena, this.scale);
     this.initAmbientMotes();
     
@@ -325,9 +356,11 @@ export class ChainReactionGame {
   }
 
   startCampaignLevel(levelIndex = 0) {
-    this.mode = 'campaign';
-    this.currentLevelIndex = Math.max(0, Math.min(levelIndex, CAMPAIGN_LEVELS.length - 1));
-    const lvl = CAMPAIGN_LEVELS[this.currentLevelIndex];
+    const levels = this.currentCampaign.levels;
+    if (!levels || levels.length === 0) return;
+
+    this.currentLevelIndex = Math.max(0, Math.min(levelIndex, levels.length - 1));
+    const lvl = levels[this.currentLevelIndex];
     
     this.state = 'ready';
     this.explodedCount = 0;
@@ -368,102 +401,6 @@ export class ChainReactionGame {
     this.notifyHUD();
   }
 
-  startEndlessMode() {
-    this.mode = 'endless';
-    this.state = 'active';
-    this.explodedCount = 0;
-    this.comboChain = 0;
-    this.score = 0;
-    this.baseScore = 0;
-    this.highestCombo = 0;
-    this.charges = 1;
-    this.endlessEnergy = 100;
-    this.totalParticles = 36;
-    this.roundTimeElapsed = 0;
-    this.isTimerRunning = true;
-    this.currentSpeedLabel = 'Zen';
-    this.awardedMilestones.clear();
-
-    this.explosions = [];
-    this.shrapnels = [];
-    this.floatingTexts = [];
-    this.particles = [];
-
-    const types = ['standard', 'standard', 'mega', 'splitter', 'vortex', 'longburner', 'speedster', 'catalyst'];
-    for (let i = 0; i < this.totalParticles; i++) {
-      const typeId = types[Math.floor(Math.random() * types.length)];
-      const x = this.arena.x + 30 * this.scale + Math.random() * (this.arena.width - 60 * this.scale);
-      const y = this.arena.y + 30 * this.scale + Math.random() * (this.arena.height - 60 * this.scale);
-      this.particles.push(new Particle(x, y, typeId, 2.5, this.arena, this.scale));
-    }
-
-    this.notifyHUD();
-  }
-
-  startChaosMode() {
-    this.mode = 'chaos';
-    this.state = 'active';
-    this.chaosTimeLeft = 25.0;
-    this.explodedCount = 0;
-    this.comboChain = 0;
-    this.highestCombo = 0;
-    this.score = 0;
-    this.baseScore = 0;
-    this.charges = 1;
-    this.totalParticles = 44;
-    this.roundTimeElapsed = 0;
-    this.isTimerRunning = true;
-    this.currentSpeedLabel = 'Hyper';
-    this.awardedMilestones.clear();
-
-    this.explosions = [];
-    this.shrapnels = [];
-    this.floatingTexts = [];
-    this.particles = [];
-
-    const types = ['standard', 'mega', 'splitter', 'vortex', 'longburner', 'speedster', 'catalyst'];
-    for (let i = 0; i < this.totalParticles; i++) {
-      const typeId = types[Math.floor(Math.random() * types.length)];
-      const x = this.arena.x + 30 * this.scale + Math.random() * (this.arena.width - 60 * this.scale);
-      const y = this.arena.y + 30 * this.scale + Math.random() * (this.arena.height - 60 * this.scale);
-      this.particles.push(new Particle(x, y, typeId, 3.2, this.arena, this.scale));
-    }
-
-    this.notifyHUD();
-  }
-
-  startSandboxMode() {
-    this.mode = 'sandbox';
-    this.state = 'ready';
-    this.explodedCount = 0;
-    this.comboChain = 0;
-    this.highestCombo = 0;
-    this.score = 0;
-    this.baseScore = 0;
-    this.charges = 999;
-    this.roundTimeElapsed = 0;
-    this.isTimerRunning = false;
-    this.currentSpeedLabel = 'Custom';
-    this.awardedMilestones.clear();
-
-    this.explosions = [];
-    this.shrapnels = [];
-    this.floatingTexts = [];
-    this.particles = [];
-
-    const available = this.sandboxConfig.enabledTypes.length > 0 ? this.sandboxConfig.enabledTypes : ['standard'];
-    this.totalParticles = this.sandboxConfig.particleCount;
-
-    for (let i = 0; i < this.totalParticles; i++) {
-      const typeId = available[Math.floor(Math.random() * available.length)];
-      const x = this.arena.x + 30 * this.scale + Math.random() * (this.arena.width - 60 * this.scale);
-      const y = this.arena.y + 30 * this.scale + Math.random() * (this.arena.height - 60 * this.scale);
-      this.particles.push(new Particle(x, y, typeId, this.sandboxConfig.particleSpeed, this.arena, this.scale));
-    }
-
-    this.notifyHUD();
-  }
-
   triggerExplosion(x, y) {
     if (
       x < this.arena.x ||
@@ -474,17 +411,13 @@ export class ChainReactionGame {
       return;
     }
 
-    if (this.charges <= 0 && this.mode !== 'sandbox') return;
-
-    if (this.mode === 'endless' && this.endlessEnergy < 100 && this.state === 'active') {
-      return;
-    }
+    if (this.charges <= 0) return;
 
     soundEngine.playSeedTrigger();
 
     const config = {
-      baseRadius: this.sandboxConfig.baseRadius,
-      baseDuration: this.sandboxConfig.baseDuration
+      baseRadius: 65,
+      baseDuration: 2.8
     };
 
     this.explosions.push(new Explosion(x, y, null, config, Math.random() * Math.PI, true, this.scale));
@@ -493,12 +426,7 @@ export class ChainReactionGame {
     // Initial grid kinetic impulse
     this.grid.applyExplosionImpulse(x, y, 75 * this.scale, 70, false);
 
-    if (this.mode === 'endless') {
-      this.endlessEnergy = 0;
-    } else if (this.mode !== 'sandbox') {
-      this.charges--;
-    }
-
+    this.charges--;
     this.state = 'active';
     this.isTimerRunning = true;
     this.notifyHUD();
@@ -525,7 +453,7 @@ export class ChainReactionGame {
       }
     }
 
-    if (this.isTimerRunning && (this.state === 'active' || this.mode === 'chaos' || this.mode === 'endless')) {
+    if (this.isTimerRunning && this.state === 'active') {
       this.roundTimeElapsed += dt;
     }
 
@@ -541,42 +469,11 @@ export class ChainReactionGame {
       else if (m.y > this.height) m.y = 0;
     }
 
-    // Endless Mode
-    if (this.mode === 'endless') {
-      if (this.endlessEnergy < 100) {
-        this.endlessEnergy = Math.min(100, this.endlessEnergy + this.endlessEnergyRate * dt);
-        this.notifyHUD();
-      }
-      const aliveCount = this.particles.filter(p => p.alive).length;
-      if (aliveCount < 28) {
-        const types = ['standard', 'standard', 'mega', 'splitter', 'vortex', 'longburner', 'speedster', 'catalyst'];
-        const typeId = types[Math.floor(Math.random() * types.length)];
-        const edge = Math.floor(Math.random() * 4);
-        let x = 0, y = 0;
-        if (edge === 0) { x = this.arena.x + Math.random() * this.arena.width; y = this.arena.y + 5; }
-        else if (edge === 1) { x = this.arena.x + this.arena.width - 5; y = this.arena.y + Math.random() * this.arena.height; }
-        else if (edge === 2) { x = this.arena.x + Math.random() * this.arena.width; y = this.arena.y + this.arena.height - 5; }
-        else { x = this.arena.x + 5; y = this.arena.y + Math.random() * this.arena.height; }
-        this.particles.push(new Particle(x, y, typeId, 2.5, this.arena, this.scale));
-      }
-    }
-
-    // Chaos Mode
-    if (this.mode === 'chaos' && this.state === 'active') {
-      this.chaosTimeLeft -= dt;
-      if (this.chaosTimeLeft <= 0) {
-        this.chaosTimeLeft = 0;
-        this.finishChaosMode();
-      }
-      this.notifyHUD();
-    }
-
     // Update Explosions & apply Spacetime Grid Warping & Vortex Forces
     for (let i = this.explosions.length - 1; i >= 0; i--) {
       const exp = this.explosions[i];
       exp.update(dt, (sx, sy) => this.spawnShrapnel(sx, sy));
 
-      // Warp Elastic Grid
       if (exp.active) {
         const force = exp.isVortex ? 65 : 45;
         this.grid.applyExplosionImpulse(exp.x, exp.y, exp.currentRadius, force, exp.isVortex);
@@ -600,8 +497,8 @@ export class ChainReactionGame {
     this.grid.update(dt);
 
     const config = {
-      baseRadius: this.sandboxConfig.baseRadius,
-      baseDuration: this.sandboxConfig.baseDuration
+      baseRadius: 65,
+      baseDuration: 2.8
     };
 
     // Update Particles & Collision
@@ -657,10 +554,6 @@ export class ChainReactionGame {
           if (p.type.givesCharge) {
             this.charges++;
             this.floatingTexts.push(new FloatingText(p.x, p.y - 20 * this.scale, '+1 CATALYST SPARK!', '#ffffff', 20, true, this.scale));
-          }
-
-          if (this.mode === 'chaos') {
-            this.chaosTimeLeft = Math.min(60, this.chaosTimeLeft + 0.45);
           }
 
           this.floatingTexts.push(new FloatingText(p.x, p.y, `+${pointsGained}`, p.type.color, 15, false, this.scale));
@@ -730,28 +623,27 @@ export class ChainReactionGame {
 
     // Instant Win Check on 100% Board Wipe
     const remainingAlive = this.particles.filter(p => p.alive).length;
-    if (this.mode === 'campaign' && this.state === 'active') {
-      if (remainingAlive === 0) {
-        this.finishCampaignRound(true);
-        return;
-      }
+    if (this.state === 'active' && remainingAlive === 0) {
+      this.finishCampaignRound(true);
+      return;
     }
 
     // Normal Round End check
     if (this.state === 'active' && this.explosions.length === 0 && this.shrapnels.length === 0) {
-      if (this.charges <= 0 && this.mode === 'campaign') {
+      if (this.charges <= 0) {
         this.finishCampaignRound(false);
-      } else if (this.mode === 'endless' || this.mode === 'sandbox') {
-        this.comboChain = 0;
       }
     }
   }
 
   finishCampaignRound(isInstantFullWipe = false) {
-    const lvlConfig = CAMPAIGN_LEVELS[this.currentLevelIndex];
+    const levels = this.currentCampaign.levels;
+    const lvlConfig = levels[this.currentLevelIndex];
     const isSuccess = isInstantFullWipe || (this.explodedCount >= this.targetQuota);
     this.state = isSuccess ? 'cleared' : 'failed';
     this.isTimerRunning = false;
+
+    const progress = this.getCampaignProgress(this.currentCampaignId);
 
     if (isSuccess) {
       soundEngine.playVictory();
@@ -774,15 +666,15 @@ export class ChainReactionGame {
       this.score = finalScore;
 
       const lvlNum = this.currentLevelIndex + 1;
-      const currentStars = this.levelStars[lvlNum] || 0;
+      const currentStars = progress.levelStars[lvlNum] || 0;
       if (stars > currentStars) {
-        this.levelStars[lvlNum] = stars;
-        localStorage.setItem('cr_level_stars', JSON.stringify(this.levelStars));
+        progress.levelStars[lvlNum] = stars;
+        this.saveCampaignProgress();
       }
 
-      if (lvlNum >= this.unlockedLevel && lvlNum < CAMPAIGN_LEVELS.length) {
-        this.unlockedLevel = lvlNum + 1;
-        localStorage.setItem('cr_unlocked_level', this.unlockedLevel.toString());
+      if (lvlNum >= progress.unlockedLevel && lvlNum < levels.length) {
+        progress.unlockedLevel = lvlNum + 1;
+        this.saveCampaignProgress();
       }
 
       const levelComparison = this.checkLevelComparison(lvlNum, this.score, this.highestCombo);
@@ -802,7 +694,7 @@ export class ChainReactionGame {
           chargeBonus: spareChargeBonus,
           score: this.score,
           isFullWipe: isInstantFullWipe || (this.explodedCount === this.totalParticles),
-          hasNextLevel: this.currentLevelIndex < CAMPAIGN_LEVELS.length - 1,
+          hasNextLevel: this.currentLevelIndex < levels.length - 1,
           levelComparison
         });
       }
@@ -828,25 +720,11 @@ export class ChainReactionGame {
     }
   }
 
-  finishChaosMode() {
-    this.state = 'cleared';
-    this.isTimerRunning = false;
-    soundEngine.playVictory();
-    const levelComparison = this.checkLevelComparison('Chaos', this.score, this.highestCombo);
-    if (this.callbacks.onChaosComplete) {
-      this.callbacks.onChaosComplete({
-        score: this.score,
-        exploded: this.explodedCount,
-        highestCombo: this.highestCombo,
-        levelComparison
-      });
-    }
-  }
-
   notifyHUD() {
+    const progress = this.getCampaignProgress(this.currentCampaignId);
     if (this.callbacks.onStateChange) {
       this.callbacks.onStateChange({
-        mode: this.mode,
+        campaign: this.currentCampaign,
         state: this.state,
         level: this.currentLevelIndex + 1,
         score: this.score,
@@ -857,11 +735,9 @@ export class ChainReactionGame {
         target: this.targetQuota,
         charges: this.charges,
         speedLabel: this.currentSpeedLabel,
-        endlessEnergy: this.endlessEnergy,
-        chaosTimeLeft: this.chaosTimeLeft,
         activeExplosions: this.explosions.length,
-        unlockedLevel: this.unlockedLevel,
-        levelStars: this.levelStars
+        unlockedLevel: progress.unlockedLevel,
+        levelStars: progress.levelStars
       });
     }
   }

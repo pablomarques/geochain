@@ -21,15 +21,24 @@
 
     <!-- Top App Navigation -->
     <header class="app-header">
-      <div class="brand-section">
-        <div class="brand-logo-polygon"></div>
-        <span class="brand-title">GeoChain</span>
+      <div class="header-left-group">
+        <div class="brand-section">
+          <div class="brand-logo-polygon"></div>
+          <span class="brand-title">GeoChain</span>
+        </div>
+
+        <!-- Active Campaign Selector Pill -->
+        <button id="btn-campaign-select" class="campaign-pill-btn" title="Switch Campaign" aria-label="Select Campaign">
+          <span id="header-campaign-badge">🌌</span>
+          <span id="header-campaign-title">Genesis Odyssey</span>
+          <span class="dropdown-chevron">▾</span>
+        </button>
       </div>
 
       <!-- Right Action Controls -->
       <div class="header-controls">
         <button id="btn-leaderboard" class="icon-btn" title="Hall of Fame" aria-label="Open Hall of Fame">🏆</button>
-        <button id="btn-level-select" class="icon-btn" title="Level Map" aria-label="Choose Campaign Level">🗺️</button>
+        <button id="btn-level-select" class="icon-btn" title="Campaign Level Map" aria-label="Choose Campaign Level">🗺️</button>
         <button id="btn-audio-toggle" class="icon-btn" title="Toggle Sound" aria-label="Toggle Sound Effects">🔊</button>
       </div>
     </header>
@@ -49,7 +58,7 @@
 
       <div class="hud-divider"></div>
 
-      <!-- Quota Meter (Campaign Mode) -->
+      <!-- Quota Meter -->
       <div id="hud-quota-container" class="quota-progress-container">
         <div class="quota-progress-header">
           <span>Quota</span>
@@ -173,15 +182,38 @@
       </div>
     </div>
 
+    <!-- Modal: Campaign Selector -->
+    <div id="modal-campaigns" class="modal-backdrop">
+      <div class="modal-card" style="width: 620px;">
+        <div class="modal-header-centered">
+          <h2 class="modal-title">Campaign Vault</h2>
+          <p class="modal-desc">Select a curated level campaign or test custom sequences.</p>
+        </div>
+
+        <div id="campaign-cards-grid" class="campaign-cards-grid">
+          <!-- Dynamically populated campaign cards -->
+        </div>
+
+        <div class="modal-actions" style="margin-top: 14px;">
+          <button id="btn-close-campaigns" class="hud-btn primary" style="width: 100%;">Close</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal: Campaign Level Selector -->
     <div id="modal-levels" class="modal-backdrop">
-      <div class="modal-card" style="width: 520px;">
-        <h2 class="modal-title">Campaign Map</h2>
-        <p class="modal-desc">Select a stage to initiate geometric cascade test.</p>
+      <div class="modal-card" style="width: 540px;">
+        <div class="modal-header-centered">
+          <h2 id="levels-modal-campaign-title" class="modal-title">Genesis Odyssey</h2>
+          <p id="levels-modal-campaign-desc" class="modal-desc">Select a stage to initiate geometric cascade test.</p>
+        </div>
 
         <div id="levels-grid" class="level-grid"></div>
 
-        <button id="btn-close-levels" class="hud-btn" style="width: 100%;">Close</button>
+        <div class="modal-actions">
+          <button id="btn-switch-campaign-from-map" class="hud-btn">📜 All Campaigns</button>
+          <button id="btn-close-levels" class="hud-btn primary">Close</button>
+        </div>
       </div>
     </div>
 

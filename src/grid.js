@@ -1,25 +1,28 @@
 /**
  * Geometry Wars Elastic Spacetime Grid Engine
- * High-performance 2D spring-mass lattice with radial blast distortion,
- * gravitational singularity warping, and stress-adaptive neon vector glow.
+ * Resolution-Independent Physical Scaling (Zero Aspect-Ratio / Resizing Exploits)
  */
 
 export class ElasticSpacetimeGrid {
-  constructor(arena, spacing = 30) {
-    this.spacing = spacing;
+  constructor(arena, baseSpacing = 30, scale = 1.0) {
+    this.baseSpacing = baseSpacing;
+    this.scale = scale;
+    this.spacing = Math.max(16, Math.round(baseSpacing * scale));
     this.arena = arena;
     this.cols = 0;
     this.rows = 0;
     this.nodes = [];
-    this.springK = 0.055;     // Elastic return stiffness
-    this.damping = 0.90;      // Velocity damping factor
-    this.neighborK = 0.045;   // Neighbor spring tension (fluid ripple propagation)
+    this.springK = 0.055;
+    this.damping = 0.90;
+    this.neighborK = 0.045;
 
-    this.rebuild(arena);
+    this.rebuild(arena, scale);
   }
 
-  rebuild(arena) {
+  rebuild(arena, scale = 1.0) {
     this.arena = arena;
+    this.scale = scale;
+    this.spacing = Math.max(16, Math.round(this.baseSpacing * scale));
     this.cols = Math.ceil(arena.width / this.spacing) + 1;
     this.rows = Math.ceil(arena.height / this.spacing) + 1;
 
@@ -32,7 +35,6 @@ export class ElasticSpacetimeGrid {
         const baseX = arena.x + c * this.spacing;
         const baseY = arena.y + r * this.spacing;
         
-        // Edge nodes are fixed anchors
         const isPinned = (c === 0 || c === this.cols - 1 || r === 0 || r === this.rows - 1);
 
         this.nodes[idx] = {
@@ -48,14 +50,14 @@ export class ElasticSpacetimeGrid {
     }
   }
 
-  resize(arena) {
-    this.rebuild(arena);
+  resize(arena, scale = 1.0) {
+    this.rebuild(arena, scale);
   }
 
-  // 50% larger affected radius for wide spacetime ripple propagation
   applyExplosionImpulse(x, y, radius, force = 45, isPull = false) {
-    const influenceRadius = Math.max(radius * 2.4, 115); // +50% larger affected zone
+    const influenceRadius = Math.max(radius * 2.4, 115 * this.scale);
     const radSq = influenceRadius * influenceRadius;
+    const scaledForce = force * this.scale;
 
     for (let i = 0; i < this.nodes.length; i++) {
       const node = this.nodes[i];
@@ -68,18 +70,16 @@ export class ElasticSpacetimeGrid {
       if (distSq < radSq && distSq > 1) {
         const dist = Math.sqrt(distSq);
         const factor = 1 - (dist / influenceRadius);
-        const smoothFalloff = factor * factor * (3 - 2 * factor); // Smoothstep curve
-        const mag = (force * smoothFalloff) / (dist + 24);
+        const smoothFalloff = factor * factor * (3 - 2 * factor);
+        const mag = (scaledForce * smoothFalloff) / (dist + 24 * this.scale);
 
         const dirX = dx / dist;
         const dirY = dy / dist;
 
         if (isPull) {
-          // Gravitational Singularity (pull inward)
           node.vx -= dirX * mag * 2.4;
           node.vy -= dirY * mag * 2.4;
         } else {
-          // Kinetic Blast Wave (push outward)
           node.vx += dirX * mag * 2.6;
           node.vy += dirY * mag * 2.6;
         }
@@ -92,7 +92,6 @@ export class ElasticSpacetimeGrid {
     const cols = this.cols;
     const rows = this.rows;
 
-    // 1. Hooke's Law: Elastic return to base resting coordinate
     for (let i = 0; i < this.nodes.length; i++) {
       const n = this.nodes[i];
       if (n.isPinned) continue;
@@ -107,7 +106,6 @@ export class ElasticSpacetimeGrid {
       n.y += n.vy * dt60;
     }
 
-    // 2. Neighbor Spring Coupling (fluid wave ripple across entire grid)
     for (let r = 1; r < rows - 1; r++) {
       for (let c = 1; c < cols - 1; c++) {
         const idx = r * cols + c;
@@ -134,15 +132,14 @@ export class ElasticSpacetimeGrid {
 
     ctx.save();
 
-    // Clip rendering strictly within arena
     ctx.beginPath();
     ctx.rect(this.arena.x, this.arena.y, this.arena.width, this.arena.height);
     ctx.clip();
 
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.14)';
-    ctx.lineWidth = 1.0;
+    ctx.lineWidth = Math.max(0.8, 1.0 * this.scale);
 
-    // 1. Horizontal Elastic Grid Lines
+    // 1. Horizontal Lines
     ctx.beginPath();
     for (let r = 0; r < rows; r++) {
       const rowOffset = r * cols;
@@ -154,7 +151,7 @@ export class ElasticSpacetimeGrid {
     }
     ctx.stroke();
 
-    // 2. Vertical Elastic Grid Lines
+    // 2. Vertical Lines
     ctx.beginPath();
     for (let c = 0; c < cols; c++) {
       ctx.moveTo(this.nodes[c].x, this.nodes[c].y);
@@ -165,8 +162,11 @@ export class ElasticSpacetimeGrid {
     }
     ctx.stroke();
 
-    // 3. Spacetime Stress Accent Glints
+    // 3. Accent Glints
     ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+    const thresholdSq = 25 * this.scale * this.scale;
+    const glintW = Math.max(1.5, 2 * this.scale);
+
     for (let i = 0; i < this.nodes.length; i++) {
       const n = this.nodes[i];
       if (n.isPinned) continue;
@@ -175,10 +175,10 @@ export class ElasticSpacetimeGrid {
       const dy = n.y - n.baseY;
       const distSq = dx * dx + dy * dy;
 
-      if (distSq > 25) {
-        const stress = Math.min(1, Math.sqrt(distSq) / 25);
+      if (distSq > thresholdSq) {
+        const stress = Math.min(1, Math.sqrt(distSq) / (25 * this.scale));
         ctx.globalAlpha = stress * 0.75;
-        ctx.fillRect(n.x - 1, n.y - 1, 2, 2);
+        ctx.fillRect(n.x - glintW / 2, n.y - glintW / 2, glintW, glintW);
       }
     }
 

@@ -1,7 +1,12 @@
 /**
  * High-Performance Geometry Wars Vector Particles
- * Zero-Allocation Trail Ring-Buffers & High-Speed Multi-Pass Vector Strokes.
+ * Resolution-Independent Physical Scaling (Zero Aspect-Ratio / Resizing Exploits)
  */
+
+export const REFERENCE_ARENA = {
+  width: 960,
+  height: 600
+};
 
 export const PARTICLE_TYPES = {
   standard: {
@@ -9,7 +14,7 @@ export const PARTICLE_TYPES = {
     name: 'Spark Triangle',
     sides: 3,
     color: '#38bdf8', // Neon Sky Cyan
-    radius: 9.0,
+    radius: 10.0,
     speedMultiplier: 1.0,
     explosionRadiusMod: 1.0,
     explosionDurationMod: 1.0,
@@ -21,7 +26,7 @@ export const PARTICLE_TYPES = {
     name: 'Heavy Diamond',
     sides: 4,
     color: '#fb923c', // Neon Amber
-    radius: 12.0,
+    radius: 13.0,
     speedMultiplier: 0.75,
     explosionRadiusMod: 1.65,
     explosionDurationMod: 1.2,
@@ -34,7 +39,7 @@ export const PARTICLE_TYPES = {
     sides: 4,
     isStar: true,
     color: '#e879f9', // Neon Fuchsia
-    radius: 9.5,
+    radius: 10.5,
     speedMultiplier: 1.1,
     explosionRadiusMod: 0.95,
     explosionDurationMod: 0.95,
@@ -46,13 +51,13 @@ export const PARTICLE_TYPES = {
     name: 'Hex Singularity',
     sides: 6,
     color: '#34d399', // Neon Emerald
-    radius: 10.5,
+    radius: 11.5,
     speedMultiplier: 0.9,
     explosionRadiusMod: 1.25,
     explosionDurationMod: 1.35,
     basePoints: 300,
     isVortex: true,
-    vortexForce: 220,
+    vortexForce: 240,
     description: 'Hexagonal gravity well that pulls neighboring geometries inward.'
   },
   longburner: {
@@ -60,7 +65,7 @@ export const PARTICLE_TYPES = {
     name: 'Ember Pentagon',
     sides: 5,
     color: '#facc15', // Neon Gold
-    radius: 9.5,
+    radius: 10.5,
     speedMultiplier: 0.95,
     explosionRadiusMod: 0.9,
     explosionDurationMod: 2.8,
@@ -73,7 +78,7 @@ export const PARTICLE_TYPES = {
     sides: 3,
     isDart: true,
     color: '#60a5fa', // Electric Blue
-    radius: 8.5,
+    radius: 9.5,
     speedMultiplier: 1.85,
     explosionRadiusMod: 1.0,
     explosionDurationMod: 0.85,
@@ -84,8 +89,8 @@ export const PARTICLE_TYPES = {
     id: 'catalyst',
     name: 'Catalyst Octagon',
     sides: 8,
-    color: '#ffffff', // Radiant White / Gold
-    radius: 10.5,
+    color: '#ffffff', // Radiant White
+    radius: 11.5,
     speedMultiplier: 1.15,
     explosionRadiusMod: 1.3,
     explosionDurationMod: 1.2,
@@ -96,30 +101,56 @@ export const PARTICLE_TYPES = {
 };
 
 export class Particle {
-  constructor(x, y, typeId = 'standard', baseSpeed = 2.4, arena = { x: 0, y: 0, width: 800, height: 600 }) {
+  constructor(x, y, typeId = 'standard', baseSpeed = 2.4, arena = { x: 0, y: 0, width: 960, height: 600 }, scale = 1.0) {
     this.x = x;
     this.y = y;
     this.type = PARTICLE_TYPES[typeId] || PARTICLE_TYPES.standard;
-    this.radius = this.type.radius;
     this.arena = arena;
+    this.scale = scale;
 
+    // Physical radius scaled proportionally to arena
+    this.radius = this.type.radius * scale;
+
+    // Base speed scaled proportionally to preserve traversal time
+    this.baseSpeed = baseSpeed;
     const angle = Math.random() * Math.PI * 2;
-    const speed = baseSpeed * this.type.speedMultiplier;
-    this.vx = Math.cos(angle) * speed;
-    this.vy = Math.sin(angle) * speed;
+    this.speed = baseSpeed * this.type.speedMultiplier * scale;
+    this.vx = Math.cos(angle) * this.speed;
+    this.vy = Math.sin(angle) * this.speed;
 
     this.rotation = Math.random() * Math.PI * 2;
     this.angularVelocity = (Math.random() - 0.5) * 2.2;
 
     this.alive = true;
 
-    // Fixed Ring-Buffer for Trails (Zero GC allocations)
+    // Fixed Ring-Buffer for Trails
     this.maxTrail = 4;
     this.trailX = new Float32Array(this.maxTrail);
     this.trailY = new Float32Array(this.maxTrail);
     this.trailRot = new Float32Array(this.maxTrail);
     this.trailHead = 0;
     this.trailFilled = 0;
+  }
+
+  // Smoothly reposition and rescale physics on window resize
+  rescale(newArena, newScale, oldArena) {
+    // Preserve relative normalized position inside arena
+    if (oldArena && oldArena.width > 0 && oldArena.height > 0) {
+      const relX = (this.x - oldArena.x) / oldArena.width;
+      const relY = (this.y - oldArena.y) / oldArena.height;
+      this.x = newArena.x + relX * newArena.width;
+      this.y = newArena.y + relY * newArena.height;
+    }
+
+    this.arena = newArena;
+    const scaleRatio = newScale / (this.scale || 1.0);
+    this.scale = newScale;
+    this.radius = this.type.radius * newScale;
+
+    // Rescale velocity vector
+    this.vx *= scaleRatio;
+    this.vy *= scaleRatio;
+    this.speed = this.baseSpeed * this.type.speedMultiplier * newScale;
   }
 
   update(dt, speedMultiplier = 1.0) {
@@ -169,9 +200,13 @@ export class Particle {
     const dx = targetX - this.x;
     const dy = targetY - this.y;
     const distSq = dx * dx + dy * dy;
-    if (distSq > 25 && distSq < 115600) { // 5px to 340px
+    const maxPullSq = (340 * this.scale) * (340 * this.scale);
+    const minPullSq = (5 * this.scale) * (5 * this.scale);
+
+    if (distSq > minPullSq && distSq < maxPullSq) {
       const dist = Math.sqrt(distSq);
-      const force = (strength / (dist + 35)) * dt * 2.6;
+      const scaledStrength = strength * this.scale;
+      const force = (scaledStrength / (dist + 35 * this.scale)) * dt * 2.6;
       this.vx += (dx / dist) * force;
       this.vy += (dy / dist) * force;
       this.vx *= 0.985;
@@ -182,11 +217,11 @@ export class Particle {
   draw(ctx) {
     if (!this.alive) return;
 
-    // 1. Vector Motion Trail (Reading from Ring Buffer)
+    // 1. Vector Motion Trail
     if (this.trailFilled > 1) {
       ctx.save();
       ctx.strokeStyle = this.type.color;
-      ctx.lineWidth = 1;
+      ctx.lineWidth = Math.max(1, 1 * this.scale);
 
       for (let i = 0; i < this.trailFilled; i++) {
         const idx = (this.trailHead - this.trailFilled + i + this.maxTrail) % this.maxTrail;
@@ -200,29 +235,28 @@ export class Particle {
 
     ctx.save();
 
-    // 2. High-Speed Layered Neon Glow (Replaces expensive Gaussian shadowBlur)
-    // Outer Thick Glow
+    // 2. High-Speed Layered Neon Glow
     ctx.globalAlpha = 0.35;
     ctx.strokeStyle = this.type.color;
-    ctx.lineWidth = 5.0;
+    ctx.lineWidth = Math.max(2, 5.0 * this.scale);
     this.renderShapePath(ctx, this.x, this.y, this.radius, this.rotation);
     ctx.stroke();
 
     // Sharp Neon Perimeter
     ctx.globalAlpha = 0.95;
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = Math.max(1.2, 2.2 * this.scale);
     ctx.stroke();
 
     // Inner White Core Line
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.0;
+    ctx.lineWidth = Math.max(0.8, 1.0 * this.scale);
     ctx.globalAlpha = 0.85;
     this.renderShapePath(ctx, this.x, this.y, this.radius * 0.96, this.rotation);
     ctx.stroke();
 
     // 3. Inner Wireframe Accents
     ctx.strokeStyle = this.type.color;
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = Math.max(1, 1.2 * this.scale);
 
     if (this.type.id === 'standard') {
       for (let i = 0; i < 3; i++) {
@@ -231,7 +265,7 @@ export class Particle {
         const vy = this.y + Math.sin(a) * this.radius;
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.arc(vx, vy, 1.5, 0, Math.PI * 2);
+        ctx.arc(vx, vy, Math.max(1, 1.5 * this.scale), 0, Math.PI * 2);
         ctx.fill();
       }
     } else if (this.type.id === 'mega') {
@@ -323,17 +357,34 @@ export class Particle {
 }
 
 export class Shrapnel {
-  constructor(x, y, angle, speed = 8.5, arena = { x: 0, y: 0, width: 800, height: 600 }) {
+  constructor(x, y, angle, baseSpeed = 8.5, arena = { x: 0, y: 0, width: 960, height: 600 }, scale = 1.0) {
     this.x = x;
     this.y = y;
-    this.vx = Math.cos(angle) * speed;
-    this.vy = Math.sin(angle) * speed;
-    this.radius = 5.0;
+    this.scale = scale;
+    this.speed = baseSpeed * scale;
+    this.vx = Math.cos(angle) * this.speed;
+    this.vy = Math.sin(angle) * this.speed;
+    this.radius = 5.0 * scale;
     this.rotation = angle;
     this.life = 0;
     this.maxLife = 1.4;
     this.alive = true;
     this.arena = arena;
+  }
+
+  rescale(newArena, newScale, oldArena) {
+    if (oldArena && oldArena.width > 0 && oldArena.height > 0) {
+      const relX = (this.x - oldArena.x) / oldArena.width;
+      const relY = (this.y - oldArena.y) / oldArena.height;
+      this.x = newArena.x + relX * newArena.width;
+      this.y = newArena.y + relY * newArena.height;
+    }
+    const ratio = newScale / (this.scale || 1.0);
+    this.scale = newScale;
+    this.radius = 5.0 * newScale;
+    this.vx *= ratio;
+    this.vy *= ratio;
+    this.arena = newArena;
   }
 
   update(dt) {
@@ -369,7 +420,7 @@ export class Shrapnel {
     
     // Laser Trail
     ctx.strokeStyle = 'rgba(232, 121, 249, 0.6)';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = Math.max(1, 2 * this.scale);
     ctx.beginPath();
     ctx.moveTo(this.x - this.vx * 3.5, this.y - this.vy * 3.5);
     ctx.lineTo(this.x, this.y);
@@ -377,7 +428,7 @@ export class Shrapnel {
 
     // Hollow Diamond Shard Head
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = Math.max(1, 1.8 * this.scale);
 
     ctx.beginPath();
     for (let i = 0; i < 4; i++) {

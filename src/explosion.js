@@ -1,6 +1,6 @@
 /**
  * High-Performance Geometry Wars Explosion & Sparkle Engine
- * Optimized for 120+ FPS: Zero GC Object Pooling, Batched Vector Draws, and Zero ShadowBlur overhead.
+ * Resolution-Independent Physical Scaling (Zero Aspect-Ratio / Resizing Exploits)
  */
 
 export class SparklePool {
@@ -20,18 +20,19 @@ export class SparklePool {
         twinkleSpeed: 20,
         streakLength: 3.0,
         glintSize: 2.5,
+        scale: 1.0,
         alive: false
       });
     }
     this.nextIndex = 0;
   }
 
-  spawn(x, y, color, speedMultiplier = 1.0) {
+  spawn(x, y, color, speedMultiplier = 1.0, scale = 1.0) {
     const sp = this.sparkles[this.nextIndex];
     this.nextIndex = (this.nextIndex + 1) % this.maxSparkles;
 
     const angle = Math.random() * Math.PI * 2;
-    const speed = (4.5 + Math.random() * 8.0) * speedMultiplier;
+    const speed = (4.5 + Math.random() * 8.0) * speedMultiplier * scale;
 
     sp.x = x;
     sp.y = y;
@@ -42,14 +43,15 @@ export class SparklePool {
     sp.decay = 0.026 + Math.random() * 0.028;
     sp.twinklePhase = Math.random() * Math.PI * 2;
     sp.twinkleSpeed = 16 + Math.random() * 20;
-    sp.streakLength = 2.5 + Math.random() * 2.2;
-    sp.glintSize = 2.0 + Math.random() * 2.2;
+    sp.streakLength = (2.5 + Math.random() * 2.2) * scale;
+    sp.glintSize = (2.0 + Math.random() * 2.2) * scale;
+    sp.scale = scale;
     sp.alive = true;
   }
 
-  spawnBurst(x, y, color, count = 20, speedMultiplier = 1.0) {
+  spawnBurst(x, y, color, count = 20, speedMultiplier = 1.0, scale = 1.0) {
     for (let i = 0; i < count; i++) {
-      this.spawn(x, y, color, speedMultiplier);
+      this.spawn(x, y, color, speedMultiplier, scale);
     }
   }
 
@@ -74,14 +76,11 @@ export class SparklePool {
     }
   }
 
-  // Batched Rendering: 120 FPS zero-overhead drawing
   draw(ctx) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
 
-    // Group active sparkles by color to minimize state changes
     const count = this.maxSparkles;
-    
     for (let i = 0; i < count; i++) {
       const sp = this.sparkles[i];
       if (!sp.alive || sp.alpha <= 0.02) continue;
@@ -96,7 +95,7 @@ export class SparklePool {
       const tailY = sp.y - sp.vy * sp.streakLength * 0.35;
 
       ctx.strokeStyle = sp.color;
-      ctx.lineWidth = 2.0;
+      ctx.lineWidth = Math.max(1, 2.0 * sp.scale);
       ctx.beginPath();
       ctx.moveTo(tailX, tailY);
       ctx.lineTo(sp.x, sp.y);
@@ -104,8 +103,8 @@ export class SparklePool {
 
       // 2. White-Hot Core Tip & Micro Cross-Glint
       ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.0;
-      const size = sp.glintSize;
+      ctx.lineWidth = Math.max(0.8, 1.0 * sp.scale);
+      const size = Math.max(1.5, sp.glintSize);
 
       ctx.beginPath();
       ctx.moveTo(sp.x - size, sp.y);
@@ -120,11 +119,12 @@ export class SparklePool {
 }
 
 export class Explosion {
-  constructor(x, y, particleType = null, config = { baseRadius: 65, baseDuration: 2.8 }, initialRotation = 0, isSeed = false) {
+  constructor(x, y, particleType = null, config = { baseRadius: 65, baseDuration: 2.8 }, initialRotation = 0, isSeed = false, scale = 1.0) {
     this.x = x;
     this.y = y;
     this.particleType = particleType;
     this.isSeed = isSeed;
+    this.scale = scale;
     
     if (particleType) {
       this.sides = particleType.sides || 6;
@@ -144,10 +144,11 @@ export class Explosion {
     const seedRadiusMultiplier = isSeed ? 1.35 : 1.0;
     const seedDurationMultiplier = isSeed ? 1.2 : 1.0;
 
-    this.maxRadius = config.baseRadius * radiusMod * seedRadiusMultiplier;
+    // Physical radius scaled to arena dimensions
+    this.maxRadius = config.baseRadius * radiusMod * seedRadiusMultiplier * scale;
     this.duration = config.baseDuration * durationMod * seedDurationMultiplier;
     this.isVortex = particleType ? !!particleType.isVortex : false;
-    this.vortexForce = particleType ? (particleType.vortexForce || 220) : 0;
+    this.vortexForce = particleType ? (particleType.vortexForce || 240) * scale : 0;
 
     this.rotation = initialRotation;
     this.spin = (Math.random() - 0.5) * 0.6;
@@ -165,6 +166,21 @@ export class Explosion {
     this.shockwaveRadius = 0;
     this.shockwaveMax = this.maxRadius * 1.35;
     this.shrapnelFired = false;
+  }
+
+  rescale(newArena, newScale, oldArena) {
+    if (oldArena && oldArena.width > 0 && oldArena.height > 0) {
+      const relX = (this.x - oldArena.x) / oldArena.width;
+      const relY = (this.y - oldArena.y) / oldArena.height;
+      this.x = newArena.x + relX * newArena.width;
+      this.y = newArena.y + relY * newArena.height;
+    }
+    const ratio = newScale / (this.scale || 1.0);
+    this.scale = newScale;
+    this.maxRadius *= ratio;
+    this.currentRadius *= ratio;
+    this.shockwaveRadius *= ratio;
+    this.shockwaveMax *= ratio;
   }
 
   update(dt, onShrapnelSpawn = null) {
@@ -212,7 +228,6 @@ export class Explosion {
     const maxBound = this.currentRadius + particle.radius;
     const distSq = dx * dx + dy * dy;
 
-    // Fast bounding circumradius check (avoids Math.hypot on misses)
     if (distSq > maxBound * maxBound) return false;
 
     const dist = Math.sqrt(distSq);
@@ -220,7 +235,6 @@ export class Explosion {
     const inRadius = this.currentRadius * Math.cos(Math.PI / N);
     if (dist <= inRadius + particle.radius) return true;
 
-    // Exact Canonical sector projection
     let angle = Math.atan2(dy, dx) - this.rotation;
     const sectorAngle = (2 * Math.PI) / N;
     angle = ((angle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
@@ -230,12 +244,6 @@ export class Explosion {
     return projectedDist <= inRadius + particle.radius;
   }
 
-  checkShrapnelCollision(shrapnel) {
-    if (!this.active || !shrapnel.alive || this.currentRadius <= 0) return false;
-    return this.checkCollision(shrapnel);
-  }
-
-  // High-Speed Multi-Pass Vector Glow (Zero ShadowBlur overhead)
   draw(ctx) {
     if (!this.alive || this.currentRadius <= 0) return;
 
@@ -246,41 +254,41 @@ export class Explosion {
       const shockAlpha = Math.max(0, (1 - (this.shockwaveRadius / this.shockwaveMax)) * this.alpha * 0.35);
       ctx.globalAlpha = shockAlpha;
       ctx.strokeStyle = this.color;
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = Math.max(1, 1.5 * this.scale);
       this.renderPolygonPath(ctx, this.x, this.y, this.sides, this.shockwaveRadius, this.rotation * 1.25);
       ctx.stroke();
     }
 
-    // 2. Outer Glow Stroke (Fast Layered Stroke)
+    // 2. Outer Glow Stroke
     ctx.globalAlpha = this.alpha * 0.4;
     ctx.strokeStyle = this.color;
-    ctx.lineWidth = this.isSeed ? 6.0 : 4.5;
+    ctx.lineWidth = Math.max(2, (this.isSeed ? 6.0 : 4.5) * this.scale);
     this.renderPolygonPath(ctx, this.x, this.y, this.sides, this.currentRadius, this.rotation);
     ctx.stroke();
 
     // 3. Crisp Inner Neon Stroke
     ctx.globalAlpha = this.alpha * 0.95;
-    ctx.lineWidth = this.isSeed ? 2.4 : 1.8;
+    ctx.lineWidth = Math.max(1.2, (this.isSeed ? 2.4 : 1.8) * this.scale);
     ctx.stroke();
 
     // 4. White-Hot Accent Edge
     ctx.globalAlpha = this.alpha * 0.75;
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.0;
+    ctx.lineWidth = Math.max(0.8, 1.0 * this.scale);
     this.renderPolygonPath(ctx, this.x, this.y, this.sides, this.currentRadius * 0.98, this.rotation);
     ctx.stroke();
 
     // Concentric echo polygon
     ctx.globalAlpha = this.alpha * 0.3;
     ctx.strokeStyle = this.color;
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = Math.max(0.8, 1.2 * this.scale);
     this.renderPolygonPath(ctx, this.x, this.y, this.sides, this.currentRadius * 0.55, -this.rotation * 1.5);
     ctx.stroke();
 
     if (this.isVortex && this.active) {
       ctx.globalAlpha = this.alpha * 0.65;
       ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.4;
+      ctx.lineWidth = Math.max(1, 1.4 * this.scale);
       this.renderPolygonPath(ctx, this.x, this.y, 3, this.currentRadius * 0.35, this.rotation * 4);
       ctx.stroke();
     }

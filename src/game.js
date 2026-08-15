@@ -1,4 +1,4 @@
-import { Particle, Shrapnel, PARTICLE_TYPES } from './particles.js';
+import { Particle, Shrapnel, PARTICLE_TYPES, REFERENCE_ARENA } from './particles.js';
 import { Explosion, SparklePool } from './explosion.js';
 import { ElasticSpacetimeGrid } from './grid.js';
 import { CAMPAIGN_LEVELS } from './levels.js';
@@ -6,17 +6,18 @@ import { soundEngine } from './audio.js';
 import { cloudLeaderboard } from './leaderboard.js';
 
 export class FloatingText {
-  constructor(x, y, text, color = '#ffffff', fontSize = 16, isCombo = false) {
+  constructor(x, y, text, color = '#ffffff', fontSize = 16, isCombo = false, scale = 1.0) {
     this.x = x;
     this.y = y;
     this.text = text;
     this.color = color;
-    this.fontSize = fontSize;
+    this.scaleFactor = Math.max(0.6, scale);
+    this.fontSize = Math.round(fontSize * this.scaleFactor);
     this.isCombo = isCombo;
     this.alpha = 1.0;
     this.life = 0;
     this.maxLife = isCombo ? 1.3 : 0.85;
-    this.vy = isCombo ? -0.8 : -1.1;
+    this.vy = (isCombo ? -0.8 : -1.1) * this.scaleFactor;
     this.scale = isCombo ? 1.25 : 1.0;
     this.alive = true;
   }
@@ -56,17 +57,18 @@ export class ChainReactionGame {
     this.width = canvas.width;
     this.height = canvas.height;
 
-    // Centered Vector Arena (16:10 aspect ratio)
+    // Centered Vector Arena with Proportional Scaling (16:10 aspect ratio)
     this.arena = {
       x: 0,
       y: 0,
-      width: 800,
-      height: 500
+      width: 960,
+      height: 600
     };
+    this.scale = 1.0;
     this.calculateArenaBounds();
 
-    // Elastic Spacetime Grid
-    this.grid = new ElasticSpacetimeGrid(this.arena, 32);
+    // Elastic Spacetime Grid with Proportional Scaling
+    this.grid = new ElasticSpacetimeGrid(this.arena, 30, this.scale);
 
     // Mode & State
     this.mode = 'campaign';
@@ -105,7 +107,7 @@ export class ChainReactionGame {
     // Chaos Mode Stats
     this.chaosTimeLeft = 25.0;
 
-    // Physics Configuration
+    // Physics Configuration (Defined in 960x600 Reference Units)
     this.sandboxConfig = {
       particleCount: 36,
       baseRadius: 65,
@@ -285,6 +287,9 @@ export class ChainReactionGame {
       width: Math.round(arenaW),
       height: Math.round(arenaH)
     };
+
+    // Calculate Physical Scale Ratio Relative to Reference 960x600 Arena
+    this.scale = this.arena.width / REFERENCE_ARENA.width;
   }
 
   initAmbientMotes() {
@@ -302,15 +307,21 @@ export class ChainReactionGame {
   }
 
   resize(w, h) {
+    const oldArena = { ...this.arena };
     this.width = w;
     this.height = h;
     this.canvas.width = w;
     this.canvas.height = h;
+    
     this.calculateArenaBounds();
-    this.grid.resize(this.arena);
+
+    // Rescale All Entities and Spacetime Grid
+    this.grid.resize(this.arena, this.scale);
     this.initAmbientMotes();
-    this.particles.forEach(p => p.arena = this.arena);
-    this.shrapnels.forEach(s => s.arena = this.arena);
+    
+    this.particles.forEach(p => p.rescale(this.arena, this.scale, oldArena));
+    this.shrapnels.forEach(s => s.rescale(this.arena, this.scale, oldArena));
+    this.explosions.forEach(exp => exp.rescale(this.arena, this.scale, oldArena));
   }
 
   startCampaignLevel(levelIndex = 0) {
@@ -348,10 +359,10 @@ export class ChainReactionGame {
 
     typesToSpawn.sort(() => Math.random() - 0.5);
     typesToSpawn.forEach(typeId => {
-      const margin = 30;
+      const margin = 30 * this.scale;
       const x = this.arena.x + margin + Math.random() * (this.arena.width - margin * 2);
       const y = this.arena.y + margin + Math.random() * (this.arena.height - margin * 2);
-      this.particles.push(new Particle(x, y, typeId, speed, this.arena));
+      this.particles.push(new Particle(x, y, typeId, speed, this.arena, this.scale));
     });
 
     this.notifyHUD();
@@ -381,9 +392,9 @@ export class ChainReactionGame {
     const types = ['standard', 'standard', 'mega', 'splitter', 'vortex', 'longburner', 'speedster', 'catalyst'];
     for (let i = 0; i < this.totalParticles; i++) {
       const typeId = types[Math.floor(Math.random() * types.length)];
-      const x = this.arena.x + 30 + Math.random() * (this.arena.width - 60);
-      const y = this.arena.y + 30 + Math.random() * (this.arena.height - 60);
-      this.particles.push(new Particle(x, y, typeId, 2.5, this.arena));
+      const x = this.arena.x + 30 * this.scale + Math.random() * (this.arena.width - 60 * this.scale);
+      const y = this.arena.y + 30 * this.scale + Math.random() * (this.arena.height - 60 * this.scale);
+      this.particles.push(new Particle(x, y, typeId, 2.5, this.arena, this.scale));
     }
 
     this.notifyHUD();
@@ -413,9 +424,9 @@ export class ChainReactionGame {
     const types = ['standard', 'mega', 'splitter', 'vortex', 'longburner', 'speedster', 'catalyst'];
     for (let i = 0; i < this.totalParticles; i++) {
       const typeId = types[Math.floor(Math.random() * types.length)];
-      const x = this.arena.x + 30 + Math.random() * (this.arena.width - 60);
-      const y = this.arena.y + 30 + Math.random() * (this.arena.height - 60);
-      this.particles.push(new Particle(x, y, typeId, 3.2, this.arena));
+      const x = this.arena.x + 30 * this.scale + Math.random() * (this.arena.width - 60 * this.scale);
+      const y = this.arena.y + 30 * this.scale + Math.random() * (this.arena.height - 60 * this.scale);
+      this.particles.push(new Particle(x, y, typeId, 3.2, this.arena, this.scale));
     }
 
     this.notifyHUD();
@@ -445,9 +456,9 @@ export class ChainReactionGame {
 
     for (let i = 0; i < this.totalParticles; i++) {
       const typeId = available[Math.floor(Math.random() * available.length)];
-      const x = this.arena.x + 30 + Math.random() * (this.arena.width - 60);
-      const y = this.arena.y + 30 + Math.random() * (this.arena.height - 60);
-      this.particles.push(new Particle(x, y, typeId, this.sandboxConfig.particleSpeed, this.arena));
+      const x = this.arena.x + 30 * this.scale + Math.random() * (this.arena.width - 60 * this.scale);
+      const y = this.arena.y + 30 * this.scale + Math.random() * (this.arena.height - 60 * this.scale);
+      this.particles.push(new Particle(x, y, typeId, this.sandboxConfig.particleSpeed, this.arena, this.scale));
     }
 
     this.notifyHUD();
@@ -476,11 +487,11 @@ export class ChainReactionGame {
       baseDuration: this.sandboxConfig.baseDuration
     };
 
-    this.explosions.push(new Explosion(x, y, null, config, Math.random() * Math.PI, true));
-    this.sparklePool.spawnBurst(x, y, '#38bdf8', 16, 1.1);
+    this.explosions.push(new Explosion(x, y, null, config, Math.random() * Math.PI, true, this.scale));
+    this.sparklePool.spawnBurst(x, y, '#38bdf8', 16, 1.1, this.scale);
 
     // Initial grid kinetic impulse
-    this.grid.applyExplosionImpulse(x, y, 75, 70, false);
+    this.grid.applyExplosionImpulse(x, y, 75 * this.scale, 70, false);
 
     if (this.mode === 'endless') {
       this.endlessEnergy = 0;
@@ -494,7 +505,7 @@ export class ChainReactionGame {
   }
 
   addScreenShake(intensity = 5, duration = 0.2) {
-    this.shakeIntensity = Math.max(this.shakeIntensity, intensity);
+    this.shakeIntensity = Math.max(this.shakeIntensity, intensity * this.scale);
     this.shakeTime = Math.max(this.shakeTime, duration);
   }
 
@@ -502,7 +513,7 @@ export class ChainReactionGame {
     const dartCount = 4;
     for (let i = 0; i < dartCount; i++) {
       const angle = (Math.PI * 2 / dartCount) * i + (Math.random() * 0.3 - 0.15);
-      this.shrapnels.push(new Shrapnel(x, y, angle, 8.5, this.arena));
+      this.shrapnels.push(new Shrapnel(x, y, angle, 8.5, this.arena, this.scale));
     }
   }
 
@@ -546,7 +557,7 @@ export class ChainReactionGame {
         else if (edge === 1) { x = this.arena.x + this.arena.width - 5; y = this.arena.y + Math.random() * this.arena.height; }
         else if (edge === 2) { x = this.arena.x + Math.random() * this.arena.width; y = this.arena.y + this.arena.height - 5; }
         else { x = this.arena.x + 5; y = this.arena.y + Math.random() * this.arena.height; }
-        this.particles.push(new Particle(x, y, typeId, 2.5, this.arena));
+        this.particles.push(new Particle(x, y, typeId, 2.5, this.arena, this.scale));
       }
     }
 
@@ -620,16 +631,16 @@ export class ChainReactionGame {
 
           soundEngine.playExplosionChime(this.comboChain, p.type.id);
 
-          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false));
+          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false, this.scale));
 
           // Distortion ripple on detonation
-          this.grid.applyExplosionImpulse(p.x, p.y, 60, 50, false);
+          this.grid.applyExplosionImpulse(p.x, p.y, 60 * this.scale, 50, false);
 
           const sparkleCount = Math.min(28, 16 + this.comboChain);
-          this.sparklePool.spawnBurst(p.x, p.y, p.type.color, sparkleCount, 1.0 + Math.min(0.4, this.comboChain * 0.02));
+          this.sparklePool.spawnBurst(p.x, p.y, p.type.color, sparkleCount, 1.0 + Math.min(0.4, this.comboChain * 0.02), this.scale);
 
           if (this.comboChain >= 5) {
-            this.sparklePool.spawnBurst(p.x, p.y, '#ffffff', 6, 1.2);
+            this.sparklePool.spawnBurst(p.x, p.y, '#ffffff', 6, 1.2, this.scale);
           }
 
           // Earned Sparks System
@@ -638,25 +649,25 @@ export class ChainReactionGame {
             if (this.comboChain >= milestone && !this.awardedMilestones.has(milestone)) {
               this.awardedMilestones.add(milestone);
               this.charges++;
-              this.floatingTexts.push(new FloatingText(p.x, p.y - 30, '+1 SPARK EARNED!', '#fef08a', 20, true));
+              this.floatingTexts.push(new FloatingText(p.x, p.y - 30 * this.scale, '+1 SPARK EARNED!', '#fef08a', 20, true, this.scale));
               break;
             }
           }
 
           if (p.type.givesCharge) {
             this.charges++;
-            this.floatingTexts.push(new FloatingText(p.x, p.y - 20, '+1 CATALYST SPARK!', '#ffffff', 20, true));
+            this.floatingTexts.push(new FloatingText(p.x, p.y - 20 * this.scale, '+1 CATALYST SPARK!', '#ffffff', 20, true, this.scale));
           }
 
           if (this.mode === 'chaos') {
             this.chaosTimeLeft = Math.min(60, this.chaosTimeLeft + 0.45);
           }
 
-          this.floatingTexts.push(new FloatingText(p.x, p.y, `+${pointsGained}`, p.type.color, 15));
+          this.floatingTexts.push(new FloatingText(p.x, p.y, `+${pointsGained}`, p.type.color, 15, false, this.scale));
 
           if (this.comboChain % 5 === 0) {
             this.addScreenShake(Math.min(9, 3 + this.comboChain * 0.3), 0.22);
-            this.floatingTexts.push(new FloatingText(p.x, p.y - 15, `x${this.comboChain} CHAIN!`, '#ffffff', 22, true));
+            this.floatingTexts.push(new FloatingText(p.x, p.y - 15 * this.scale, `x${this.comboChain} CHAIN!`, '#ffffff', 22, true, this.scale));
           }
 
           this.notifyHUD();
@@ -694,11 +705,11 @@ export class ChainReactionGame {
           this.score += points;
 
           soundEngine.playExplosionChime(this.comboChain, p.type.id);
-          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false));
-          this.grid.applyExplosionImpulse(p.x, p.y, 50, 40, false);
+          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false, this.scale));
+          this.grid.applyExplosionImpulse(p.x, p.y, 50 * this.scale, 40, false);
           
-          this.sparklePool.spawnBurst(p.x, p.y, '#e879f9', 16, 1.1);
-          this.floatingTexts.push(new FloatingText(p.x, p.y, `+${points} [SHARD]`, '#e879f9', 16));
+          this.sparklePool.spawnBurst(p.x, p.y, '#e879f9', 16, 1.1, this.scale);
+          this.floatingTexts.push(new FloatingText(p.x, p.y, `+${points} [SHARD]`, '#e879f9', 16, false, this.scale));
           this.notifyHUD();
           break;
         }
@@ -874,7 +885,7 @@ export class ChainReactionGame {
       const m = this.ambientMotes[i];
       ctx.globalAlpha = m.alpha;
       ctx.beginPath();
-      ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
+      ctx.arc(m.x, m.y, m.radius * Math.max(0.6, this.scale), 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
@@ -892,13 +903,13 @@ export class ChainReactionGame {
 
     // Glowing Neon Perimeter Border
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = Math.max(1.2, 1.8 * this.scale);
     ctx.strokeRect(x, y, w, h);
 
     // Corner Brackets
-    const bracketLen = 24;
+    const bracketLen = Math.max(14, 24 * this.scale);
     ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 2.4;
+    ctx.lineWidth = Math.max(1.5, 2.4 * this.scale);
 
     // Top-Left
     ctx.beginPath();

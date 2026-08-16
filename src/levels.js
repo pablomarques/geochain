@@ -68,7 +68,6 @@ export function resolveLevelConfig(levelData, platform = 'desktop') {
   if (fmt.chainDurationScale === undefined) fmt.chainDurationScale = 1.0;
 
   // Canonicalize per-body configuration { count, size, speed, blast, duration }
-  const defaultSize = fmt.bodySizeScale || (p === 'mobile' ? 1.15 : 1.0);
   const bodies = {};
   let totalCount = 0;
   const dist = {};
@@ -77,14 +76,14 @@ export function resolveLevelConfig(levelData, platform = 'desktop') {
     if (fmt.bodies && fmt.bodies[type]) {
       const b = fmt.bodies[type];
       const count = typeof b === 'number' ? b : (b.count || 0);
-      const size = typeof b === 'object' && b.size !== undefined ? b.size : defaultSize;
+      const size = typeof b === 'object' && b.size !== undefined ? b.size : 1.0;
       const speed = typeof b === 'object' && b.speed !== undefined ? b.speed : 1.0;
       const blast = typeof b === 'object' && b.blast !== undefined ? b.blast : 1.0;
       const duration = typeof b === 'object' && b.duration !== undefined ? b.duration : 1.0;
       bodies[type] = { count, size, speed, blast, duration };
     } else {
       const count = (fmt.distribution && fmt.distribution[type]) || 0;
-      bodies[type] = { count, size: defaultSize, speed: 1.0, blast: 1.0, duration: 1.0 };
+      bodies[type] = { count, size: 1.0, speed: 1.0, blast: 1.0, duration: 1.0 };
     }
     dist[type] = bodies[type].count;
     totalCount += bodies[type].count;

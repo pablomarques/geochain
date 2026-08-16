@@ -182,7 +182,7 @@ export function drawObstacleWall(ctx, x1, y1, x2, y2, scale = 1.0) {
 }
 
 export class Particle {
-  constructor(x, y, typeId = 'standard', baseSpeed = 2.4, arena = { x: 0, y: 0, width: 960, height: 600 }, scale = 1.0, bodyScale = 1.0, speedScale = 1.0, blastScale = 1.0, durationScale = 1.0) {
+  constructor(x, y, typeId = 'standard', baseSpeed = 2.4, arena = { x: 0, y: 0, width: 960, height: 600 }, scale = 1.0, bodyScale = 1.0, speedScale = 1.0, blastScale = 1.0, durationScale = 1.0, globalBodyScale = 1.0) {
     this.x = x;
     this.y = y;
     this.type = PARTICLE_TYPES[typeId] || PARTICLE_TYPES.standard;
@@ -192,9 +192,10 @@ export class Particle {
     this.speedScale = speedScale || 1.0;
     this.blastScale = blastScale || 1.0;
     this.durationScale = durationScale || 1.0;
+    this.globalBodyScale = globalBodyScale || 1.0;
 
-    // Physical radius scaled proportionally to arena and body size multiplier
-    this.radius = this.type.radius * this.bodyScale * scale;
+    // Physical radius scaled proportionally to global body multiplier, individual shape multiplier, and arena scale
+    this.radius = this.type.radius * this.globalBodyScale * this.bodyScale * scale;
 
     // Base speed scaled proportionally to preserve traversal time
     this.baseSpeed = baseSpeed;
@@ -217,8 +218,8 @@ export class Particle {
     this.trailFilled = 0;
   }
 
-  // Smoothly reposition and rescale physics on window resize
-  rescale(newArena, newScale, oldArena, bodyScale = null, speedScale = null, blastScale = null, durationScale = null) {
+  // Smoothly reposition and rescale physics on window resize or dynamic calibration adjustments
+  rescale(newArena, newScale, oldArena, bodyScale = null, speedScale = null, blastScale = null, durationScale = null, globalBodyScale = null, baseSpeed = null) {
     if (bodyScale !== null) {
       this.bodyScale = bodyScale;
     }
@@ -231,6 +232,12 @@ export class Particle {
     if (durationScale !== null) {
       this.durationScale = durationScale;
     }
+    if (globalBodyScale !== null) {
+      this.globalBodyScale = globalBodyScale;
+    }
+    if (baseSpeed !== null) {
+      this.baseSpeed = baseSpeed;
+    }
 
     if (oldArena && oldArena.width > 0 && oldArena.height > 0) {
       const relX = (this.x - oldArena.x) / oldArena.width;
@@ -240,14 +247,15 @@ export class Particle {
     }
 
     this.arena = newArena;
-    const scaleRatio = newScale / (this.scale || 1.0);
     this.scale = newScale;
-    this.radius = this.type.radius * this.bodyScale * newScale;
+    this.radius = this.type.radius * this.globalBodyScale * this.bodyScale * newScale;
 
-    // Rescale velocity vector
-    this.vx *= scaleRatio;
-    this.vy *= scaleRatio;
-    this.speed = this.baseSpeed * this.type.speedMultiplier * this.speedScale * newScale;
+    // Recalculate target speed and update velocity vectors preserving current heading
+    const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy) || 0.001;
+    const targetSpeed = this.baseSpeed * this.type.speedMultiplier * this.speedScale * newScale;
+    this.speed = targetSpeed;
+    this.vx = (this.vx / currentSpeed) * targetSpeed;
+    this.vy = (this.vy / currentSpeed) * targetSpeed;
   }
 
   update(dt, speedMultiplier = 1.0, walls = []) {

@@ -684,12 +684,12 @@ class StudioController {
     };
 
     const baseSpeed = spec.baseSpeed || 2.4;
-    const defaultBodyScale = spec.bodySizeScale !== undefined ? spec.bodySizeScale : (this.editingFormat === 'mobile' ? 1.15 : 1.0);
+    const globalBodyScale = spec.bodySizeScale !== undefined ? spec.bodySizeScale : (this.editingFormat === 'mobile' ? 1.15 : 1.0);
     
     const typesToSpawn = [];
     for (const [typeId, bodySpec] of Object.entries(spec.bodies || {})) {
       const count = typeof bodySpec === 'number' ? bodySpec : (bodySpec.count || 0);
-      const size = typeof bodySpec === 'object' && bodySpec.size !== undefined ? bodySpec.size : defaultBodyScale;
+      const size = typeof bodySpec === 'object' && bodySpec.size !== undefined ? bodySpec.size : 1.0;
       const speedScale = typeof bodySpec === 'object' && bodySpec.speed !== undefined ? bodySpec.speed : 1.0;
       const blastScale = typeof bodySpec === 'object' && bodySpec.blast !== undefined ? bodySpec.blast : 1.0;
       const durationScale = typeof bodySpec === 'object' && bodySpec.duration !== undefined ? bodySpec.duration : 1.0;
@@ -703,7 +703,7 @@ class StudioController {
       const margin = 28 * this.scale;
       const x = this.arena.x + margin + rng() * (this.arena.width - margin * 2);
       const y = this.arena.y + margin + rng() * (this.arena.height - margin * 2);
-      this.particles.push(new Particle(x, y, item.typeId, baseSpeed, this.arena, this.scale, item.size, item.speedScale, item.blastScale, item.durationScale));
+      this.particles.push(new Particle(x, y, item.typeId, baseSpeed, this.arena, this.scale, item.size, item.speedScale, item.blastScale, item.durationScale, globalBodyScale));
     });
 
     if (this.activeTool === 'spark') {
@@ -1279,7 +1279,7 @@ class StudioController {
           entitySizeLabels[type].textContent = `${val.toFixed(2)}x`;
           if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0, blast: 1.0, duration: 1.0 };
           this.activeFormatSpec.bodies[type].size = val;
-          this.respawnSimulation();
+          this.particles.filter(p => p.type.id === type).forEach(p => p.rescale(this.arena, this.scale, null, val, null, null, null, null, null));
         });
       }
 
@@ -1290,7 +1290,7 @@ class StudioController {
           entitySpeedLabels[type].textContent = `${val.toFixed(2)}x`;
           if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0, blast: 1.0, duration: 1.0 };
           this.activeFormatSpec.bodies[type].speed = val;
-          this.respawnSimulation();
+          this.particles.filter(p => p.type.id === type).forEach(p => p.rescale(this.arena, this.scale, null, null, val, null, null, null, null));
         });
       }
 
@@ -1301,7 +1301,7 @@ class StudioController {
           entityBlastLabels[type].textContent = `${val.toFixed(2)}x`;
           if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0, blast: 1.0, duration: 1.0 };
           this.activeFormatSpec.bodies[type].blast = val;
-          this.respawnSimulation();
+          this.particles.filter(p => p.type.id === type).forEach(p => { p.blastScale = val; });
         });
       }
 
@@ -1312,7 +1312,7 @@ class StudioController {
           entityDurationLabels[type].textContent = `${val.toFixed(2)}x`;
           if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0, blast: 1.0, duration: 1.0 };
           this.activeFormatSpec.bodies[type].duration = val;
-          this.respawnSimulation();
+          this.particles.filter(p => p.type.id === type).forEach(p => { p.durationScale = val; });
         });
       }
     });
@@ -1325,7 +1325,7 @@ class StudioController {
       this.activeFormatSpec.baseSpeed = val;
       this.activeFormatSpec.speedLabel = label;
       this.renderLevelSequenceList();
-      this.respawnSimulation();
+      this.particles.forEach(p => p.rescale(this.arena, this.scale, null, null, null, null, null, null, val));
     });
 
     // Global Base Body Size Multiplier Slider
@@ -1334,7 +1334,7 @@ class StudioController {
       this.activeFormatSpec.bodySizeScale = val;
       this.updateBodyScaleLabel(val);
       this.renderLevelSequenceList();
-      this.respawnSimulation();
+      this.particles.forEach(p => p.rescale(this.arena, this.scale, null, null, null, null, null, val, null));
     });
 
     // User Spark Explosion Radius Slider

@@ -1,4 +1,4 @@
-import { Particle, Shrapnel, PARTICLE_TYPES, REFERENCE_ARENA, drawObstacleWall } from './particles.js';
+import { Particle, Shrapnel, PARTICLE_TYPES, REFERENCE_ARENA, drawObstacleWall, findSafeSpawnPosition } from './particles.js';
 import { Explosion, SparklePool } from './explosion.js';
 import { ElasticSpacetimeGrid } from './grid.js';
 import { CAMPAIGNS, resolveLevelConfig } from './levels.js';
@@ -426,10 +426,10 @@ export class ChainReactionGame {
 
     typesToSpawn.sort(() => Math.random() - 0.5);
     typesToSpawn.forEach(item => {
-      const margin = 28 * this.scale;
-      const x = this.arena.x + margin + Math.random() * (this.arena.width - margin * 2);
-      const y = this.arena.y + margin + Math.random() * (this.arena.height - margin * 2);
-      this.particles.push(new Particle(x, y, item.typeId, speed, this.arena, this.scale, item.size, item.speedScale, item.blastScale, item.durationScale, this.bodySizeScale));
+      const pType = PARTICLE_TYPES[item.typeId] || PARTICLE_TYPES.standard;
+      const effectiveRadius = pType.radius * this.bodySizeScale * item.size * this.scale;
+      const pos = findSafeSpawnPosition(this.arena, this.walls, effectiveRadius, this.scale, Math.random);
+      this.particles.push(new Particle(pos.x, pos.y, item.typeId, speed, this.arena, this.scale, item.size, item.speedScale, item.blastScale, item.durationScale, this.bodySizeScale));
     });
 
     this.notifyHUD();

@@ -181,6 +181,217 @@ export function drawObstacleWall(ctx, x1, y1, x2, y2, scale = 1.0) {
   ctx.restore();
 }
 
+/**
+ * Extract closed cycles (polygons/rooms) formed by connected wall segments
+ */
+export function extractPolygonsFromWalls(walls, arena, scale = 1.0) {
+  if (!walls || walls.length < 3) return [];
+
+  const vertices = [];
+  const clusterDistSq = (10 * scale) * (10 * scale);
+
+  function getOrAddVertex(px, py) {
+    for (let i = 0; i < vertices.length; i++) {
+      const dx = vertices[i].x - px;
+      const dy = vertices[i].y - py;
+      if (dx * dx + dy * dy <= clusterDistSq) {
+        return i;
+      }
+    }
+    vertices.push({ x: px, y: py });
+    return vertices.length - 1;
+  }
+
+  const adj = [];
+  walls.forEach(w => {
+    const p1x = arena.x + w.x1 * arena.width;
+    const p1y = arena.y + w.y1 * arena.height;
+    const p2x = arena.x + w.x2 * arena.width;
+    const p2y = arena.y + w.y2 * arena.height;
+
+    const u = getOrAddVertex(p1x, p1y);
+    const v = getOrAddVertex(p2x, p2y);
+
+    if (u !== v) {
+      while (adj.length <= Math.max(u, v)) adj.push([]);
+      if (!adj[u].includes(v)) adj[u].push(v);
+      if (!adj[v].includes(u)) adj[v].push(u);
+    }
+  });
+
+  const polygons = [];
+  const foundCycleKeys = new Set();
+
+  function dfs(start, current, parent, path) {
+    if (path.length > 20) return;
+
+    const neighbors = adj[current] || [];
+    for (let i = 0; i < neighbors.length; i++) {
+      const neighbor = neighbors[i];
+      if (neighbor === parent) continue;
+
+      if (neighbor === start && path.length >= 3) {
+        // Canonicalize cycle for unique keying
+        const cycle = [...path];
+        const minIdx = cycle.indexOf(Math.min(...cycle));
+        const rotated = [...cycle.slice(minIdx), ...cycle.slice(0, minIdx)];
+        const key = rotated.join('-');
+
+        if (!foundCycleKeys.has(key)) {
+          foundCycleKeys.add(key);
+          polygons.push(rotated.map(idx => vertices[idx]));
+        }
+        continue;
+      }
+
+      if (!path.includes(neighbor)) {
+        dfs(start, neighbor, current, [...path, neighbor]);
+      }
+    }
+  }
+
+  for (let i = 0; i < vertices.length; i++) {
+    if (adj[i] && adj[i].length >= 2) {
+      dfs(i, i, -1, [i]);
+    }
+  }
+
+  return polygons;
+}
+
+/**
+ * Standard Jordan Curve Theorem Point-in-Polygon Test
+ */
+export function isPointInPolygon(px, py, polygon) {
+  if (!polygon || polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].y;
+    const xj = polygon[j].x, yj = polygon[j].y;
+
+    const intersect = ((yi > py) !== (yj > py)) &&
+      (px < (xj - xi) * (py - yi) / (yj - yi || 0.000001) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Squared perpendicular distance from point to line segment
+ */
+export function distToSegmentSq(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 0.0001) return (px - x1) * (px - x1) + (py - y1) * (py - y1);
+
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+  const projX = x1 + t * dx;
+  const projY = y1 + t * dy;
+  const ex = px - projX;
+  const ey = py - projY;
+  return ex * ex + ey * ey;
+}
+
+/**
+ * Check if a candidate spawn position is valid and clear of all walls and closed shapes
+ */
+export function isValidSpawnPosition(px, py, radius, arena, walls, polygons = null, scale = 1.0) {
+  const buffer = radius + 8 * scale;
+
+  // 1. Boundary Clearance
+  if (
+    px < arena.x + buffer ||
+    px > arena.x + arena.width - buffer ||
+    py < arena.y + buffer ||
+    py > arena.y + arena.height - buffer
+  ) {
+    return false;
+  }
+
+  // 2. Reject if inside ANY drawn closed shape / polygon
+  const polys = polygons || extractPolygonsFromWalls(walls, arena, scale);
+  for (let i = 0; i < polys.length; i++) {
+    if (isPointInPolygon(px, py, polys[i])) {
+      return false;
+    }
+  }
+
+  // 3. Reject if too close to / intersecting ANY wall segment
+  if (walls && walls.length > 0) {
+    const minClearanceSq = buffer * buffer;
+    for (let i = 0; i < walls.length; i++) {
+      const w = walls[i];
+      const wx1 = arena.x + w.x1 * arena.width;
+      const wy1 = arena.y + w.y1 * arena.height;
+      const wx2 = arena.x + w.x2 * arena.width;
+      const wy2 = arena.y + w.y2 * arena.height;
+
+      if (distToSegmentSq(px, py, wx1, wy1, wx2, wy2) < minClearanceSq) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Find safe spawn coordinates guaranteed outside drawn shapes and away from walls
+ */
+export function findSafeSpawnPosition(arena, walls, radius, scale = 1.0, rng = Math.random, maxAttempts = 350) {
+  const polygons = extractPolygonsFromWalls(walls, arena, scale);
+  const margin = Math.max(radius + 10 * scale, 24 * scale);
+
+  let bestCandidate = null;
+  let bestScore = -Infinity;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const px = arena.x + margin + rng() * (arena.width - margin * 2);
+    const py = arena.y + margin + rng() * (arena.height - margin * 2);
+
+    if (isValidSpawnPosition(px, py, radius, arena, walls, polygons, scale)) {
+      return { x: px, y: py };
+    }
+
+    // Score fallback candidate based on clearance from walls
+    let minDistSq = Infinity;
+    if (walls && walls.length > 0) {
+      for (let i = 0; i < walls.length; i++) {
+        const w = walls[i];
+        const wx1 = arena.x + w.x1 * arena.width;
+        const wy1 = arena.y + w.y1 * arena.height;
+        const wx2 = arena.x + w.x2 * arena.width;
+        const wy2 = arena.y + w.y2 * arena.height;
+        const dSq = distToSegmentSq(px, py, wx1, wy1, wx2, wy2);
+        if (dSq < minDistSq) minDistSq = dSq;
+      }
+    } else {
+      minDistSq = 1000;
+    }
+
+    // Penalize if inside polygon
+    let insidePoly = false;
+    for (let i = 0; i < polygons.length; i++) {
+      if (isPointInPolygon(px, py, polygons[i])) {
+        insidePoly = true;
+        break;
+      }
+    }
+
+    const score = insidePoly ? -10000 + minDistSq : minDistSq;
+    if (score > bestScore) {
+      bestScore = score;
+      bestCandidate = { x: px, y: py };
+    }
+  }
+
+  return bestCandidate || {
+    x: arena.x + arena.width / 2,
+    y: arena.y + arena.height / 2
+  };
+}
+
 export class Particle {
   constructor(x, y, typeId = 'standard', baseSpeed = 2.4, arena = { x: 0, y: 0, width: 960, height: 600 }, scale = 1.0, bodyScale = 1.0, speedScale = 1.0, blastScale = 1.0, durationScale = 1.0, globalBodyScale = 1.0) {
     this.x = x;

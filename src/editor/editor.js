@@ -1,4 +1,4 @@
-import { Particle, Shrapnel, PARTICLE_TYPES, REFERENCE_ARENA, drawObstacleWall, checkSegmentCollision } from '../particles.js';
+import { Particle, Shrapnel, PARTICLE_TYPES, REFERENCE_ARENA, drawObstacleWall, checkSegmentCollision, findSafeSpawnPosition } from '../particles.js';
 import { Explosion, SparklePool } from '../explosion.js';
 import { ElasticSpacetimeGrid } from '../grid.js';
 import { CAMPAIGNS, resolveLevelConfig } from '../levels.js';
@@ -701,10 +701,10 @@ class StudioController {
 
     typesToSpawn.sort(() => rng() - 0.5);
     typesToSpawn.forEach(item => {
-      const margin = 28 * this.scale;
-      const x = this.arena.x + margin + rng() * (this.arena.width - margin * 2);
-      const y = this.arena.y + margin + rng() * (this.arena.height - margin * 2);
-      this.particles.push(new Particle(x, y, item.typeId, baseSpeed, this.arena, this.scale, item.size, item.speedScale, item.blastScale, item.durationScale, globalBodyScale));
+      const pType = PARTICLE_TYPES[item.typeId] || PARTICLE_TYPES.standard;
+      const effectiveRadius = pType.radius * globalBodyScale * item.size * this.scale;
+      const pos = findSafeSpawnPosition(this.arena, spec.walls, effectiveRadius, this.scale, rng);
+      this.particles.push(new Particle(pos.x, pos.y, item.typeId, baseSpeed, this.arena, this.scale, item.size, item.speedScale, item.blastScale, item.durationScale, globalBodyScale));
     });
 
     if (this.activeTool === 'spark') {

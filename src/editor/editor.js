@@ -138,6 +138,7 @@ class StudioController {
     this.isDrawingWall = false;
     this.wallStartPos = null;
     this.wallCurrentPos = null;
+    this.hoverCursorPos = null;
 
     // Simulation Physics State
     this.ctx = canvas.getContext('2d');
@@ -891,9 +892,52 @@ class StudioController {
     telStars.textContent = starStr;
   }
 
-  snapCoord(relVal) {
-    if (!this.snapGrid) return relVal;
-    return Math.round(relVal / 0.05) * 0.05;
+  snapToGridVertex(clickX, clickY) {
+    if (!this.snapGrid) {
+      const relX = (clickX - this.arena.x) / this.arena.width;
+      const relY = (clickY - this.arena.y) / this.arena.height;
+      return {
+        x: +Math.max(0.01, Math.min(0.99, relX)).toFixed(4),
+        y: +Math.max(0.01, Math.min(0.99, relY)).toFixed(4),
+        pixelX: clickX,
+        pixelY: clickY
+      };
+    }
+
+    const spacing = this.grid.spacing;
+    const relPixelX = clickX - this.arena.x;
+    const relPixelY = clickY - this.arena.y;
+
+    const cols = this.grid.cols;
+    const rows = this.grid.rows;
+
+    let c = Math.round(relPixelX / spacing);
+    let r = Math.round(relPixelY / spacing);
+
+    c = Math.max(0, Math.min(c, cols - 1));
+    r = Math.max(0, Math.min(r, rows - 1));
+
+    const nodeIdx = r * cols + c;
+    const node = this.grid.nodes && this.grid.nodes[nodeIdx];
+
+    let snappedPixelX = node ? node.x : (this.arena.x + c * spacing);
+    let snappedPixelY = node ? node.y : (this.arena.y + r * spacing);
+
+    // Pin cleanly to arena bounds
+    if (snappedPixelX < this.arena.x) snappedPixelX = this.arena.x;
+    if (snappedPixelX > this.arena.x + this.arena.width) snappedPixelX = this.arena.x + this.arena.width;
+    if (snappedPixelY < this.arena.y) snappedPixelY = this.arena.y;
+    if (snappedPixelY > this.arena.y + this.arena.height) snappedPixelY = this.arena.y + this.arena.height;
+
+    const relX = (snappedPixelX - this.arena.x) / this.arena.width;
+    const relY = (snappedPixelY - this.arena.y) / this.arena.height;
+
+    return {
+      x: +relX.toFixed(4),
+      y: +relY.toFixed(4),
+      pixelX: snappedPixelX,
+      pixelY: snappedPixelY
+    };
   }
 
   renderLoop(time) {
@@ -927,29 +971,69 @@ class StudioController {
         drawObstacleWall(ctx, wx1, wy1, wx2, wy2, this.scale);
       }
 
-      // Render In-Progress Drawn Wall Preview
-      if (this.isDrawingWall && this.wallStartPos && this.wallCurrentPos) {
-        const wx1 = this.arena.x + this.wallStartPos.x * this.arena.width;
-        const wy1 = this.arena.y + this.wallStartPos.y * this.arena.height;
-        const wx2 = this.arena.x + this.wallCurrentPos.x * this.arena.width;
-        const wy2 = this.arena.y + this.wallCurrentPos.y * this.arena.height;
-        
-        ctx.save();
-        ctx.strokeStyle = '#e879f9';
-        ctx.lineWidth = Math.max(2, 3.5 * this.scale);
-        ctx.setLineDash([8 * this.scale, 6 * this.scale]);
-        ctx.beginPath();
-        ctx.moveTo(wx1, wy1);
-        ctx.lineTo(wx2, wy2);
-        ctx.stroke();
-
-        ctx.fillStyle = '#ffffff';
-        [ [wx1, wy1], [wx2, wy2] ].forEach(([nx, ny]) => {
+      // Render Obstacle Wall Snap Reticle & Active Drawing Line
+      if (this.activeTool === 'wall') {
+        if (!this.isDrawingWall && this.hoverCursorPos) {
+          const snap = this.snapToGridVertex(this.hoverCursorPos.x, this.hoverCursorPos.y);
+          ctx.save();
+          // Magnetic Snap Reticle on Mesh Vertex
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = Math.max(1.2, 1.8 * this.scale);
           ctx.beginPath();
-          ctx.arc(nx, ny, 5 * this.scale, 0, Math.PI * 2);
+          ctx.arc(snap.pixelX, snap.pixelY, 6.5 * this.scale, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.fillStyle = '#38bdf8';
+          ctx.beginPath();
+          ctx.arc(snap.pixelX, snap.pixelY, 2.5 * this.scale, 0, Math.PI * 2);
           ctx.fill();
-        });
-        ctx.restore();
+
+          // Reticle Crosshairs
+          const cross = 11 * this.scale;
+          ctx.beginPath();
+          ctx.moveTo(snap.pixelX - cross, snap.pixelY);
+          ctx.lineTo(snap.pixelX - 7 * this.scale, snap.pixelY);
+          ctx.moveTo(snap.pixelX + 7 * this.scale, snap.pixelY);
+          ctx.lineTo(snap.pixelX + cross, snap.pixelY);
+          ctx.moveTo(snap.pixelX, snap.pixelY - cross);
+          ctx.lineTo(snap.pixelX, snap.pixelY - 7 * this.scale);
+          ctx.moveTo(snap.pixelX, snap.pixelY + 7 * this.scale);
+          ctx.lineTo(snap.pixelX, snap.pixelY + cross);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if (this.isDrawingWall && this.wallStartPos && this.wallCurrentPos) {
+          const wx1 = this.wallStartPos.pixelX;
+          const wy1 = this.wallStartPos.pixelY;
+          const wx2 = this.wallCurrentPos.pixelX;
+          const wy2 = this.wallCurrentPos.pixelY;
+
+          ctx.save();
+          // Neon glow line aligned with spacetime mesh
+          ctx.strokeStyle = '#e879f9';
+          ctx.shadowColor = '#e879f9';
+          ctx.shadowBlur = 12 * this.scale;
+          ctx.lineWidth = Math.max(2, 3.5 * this.scale);
+          ctx.setLineDash([8 * this.scale, 5 * this.scale]);
+          ctx.beginPath();
+          ctx.moveTo(wx1, wy1);
+          ctx.lineTo(wx2, wy2);
+          ctx.stroke();
+
+          // Mesh Vertex Cap Nodes
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = '#ffffff';
+          [ [wx1, wy1], [wx2, wy2] ].forEach(([nx, ny]) => {
+            ctx.beginPath();
+            ctx.arc(nx, ny, 5.5 * this.scale, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#e879f9';
+            ctx.lineWidth = 1.5 * this.scale;
+            ctx.stroke();
+          });
+          ctx.restore();
+        }
       }
 
       // 4. Explosions
@@ -1006,17 +1090,14 @@ class StudioController {
       const rect = canvas.getBoundingClientRect();
       const clickX = (e.clientX - rect.left) * (this.arena.width / rect.width);
       const clickY = (e.clientY - rect.top) * (this.arena.height / rect.height);
-      const relX = (clickX - this.arena.x) / this.arena.width;
-      const relY = (clickY - this.arena.y) / this.arena.height;
 
       if (this.activeTool === 'spark') {
         this.triggerSpark(clickX, clickY);
       } else if (this.activeTool === 'wall') {
         this.isDrawingWall = true;
-        const sx = this.snapCoord(Math.max(0.02, Math.min(0.98, relX)));
-        const sy = this.snapCoord(Math.max(0.02, Math.min(0.98, relY)));
-        this.wallStartPos = { x: sx, y: sy };
-        this.wallCurrentPos = { x: sx, y: sy };
+        const snap = this.snapToGridVertex(clickX, clickY);
+        this.wallStartPos = snap;
+        this.wallCurrentPos = snap;
       } else if (this.activeTool === 'erase') {
         const walls = this.activeFormatSpec.walls || [];
         for (let i = walls.length - 1; i >= 0; i--) {
@@ -1046,18 +1127,20 @@ class StudioController {
       }
     });
 
-    window.addEventListener('pointermove', (e) => {
-      if (this.isDrawingWall && this.wallStartPos) {
-        const rect = canvas.getBoundingClientRect();
-        const clickX = (e.clientX - rect.left) * (this.arena.width / rect.width);
-        const clickY = (e.clientY - rect.top) * (this.arena.height / rect.height);
-        const relX = (clickX - this.arena.x) / this.arena.width;
-        const relY = (clickY - this.arena.y) / this.arena.height;
+    canvas.addEventListener('pointermove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const clickX = (e.clientX - rect.left) * (this.arena.width / rect.width);
+      const clickY = (e.clientY - rect.top) * (this.arena.height / rect.height);
+      this.hoverCursorPos = { x: clickX, y: clickY };
 
-        const cx = this.snapCoord(Math.max(0.02, Math.min(0.98, relX)));
-        const cy = this.snapCoord(Math.max(0.02, Math.min(0.98, relY)));
-        this.wallCurrentPos = { x: cx, y: cy };
+      if (this.isDrawingWall && this.wallStartPos) {
+        const snap = this.snapToGridVertex(clickX, clickY);
+        this.wallCurrentPos = snap;
       }
+    });
+
+    canvas.addEventListener('pointerleave', () => {
+      this.hoverCursorPos = null;
     });
 
     window.addEventListener('pointerup', () => {
@@ -1066,15 +1149,15 @@ class StudioController {
         const dy = this.wallCurrentPos.y - this.wallStartPos.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        if (dist > 0.04) {
+        if (dist > 0.012) {
           if (!this.activeFormatSpec.walls) this.activeFormatSpec.walls = [];
           this.activeFormatSpec.walls.push({
-            x1: +this.wallStartPos.x.toFixed(3),
-            y1: +this.wallStartPos.y.toFixed(3),
-            x2: +this.wallCurrentPos.x.toFixed(3),
-            y2: +this.wallCurrentPos.y.toFixed(3)
+            x1: +this.wallStartPos.x.toFixed(4),
+            y1: +this.wallStartPos.y.toFixed(4),
+            x2: +this.wallCurrentPos.x.toFixed(4),
+            y2: +this.wallCurrentPos.y.toFixed(4)
           });
-          this.showToast(`Added obstacle wall to ${this.editingFormat.toUpperCase()}`);
+          this.showToast(`Obstacle wall snapped to mesh vertices! (${this.editingFormat.toUpperCase()})`);
           wallCountBadge.textContent = this.activeFormatSpec.walls.length;
           this.renderLevelSequenceList();
           this.respawnSimulation();
@@ -1100,12 +1183,12 @@ class StudioController {
       });
     });
 
-    // Snap to Grid
+    // Snap to Grid (Mesh Vertices)
     btnSnapGrid.addEventListener('click', () => {
       this.snapGrid = !this.snapGrid;
       btnSnapGrid.classList.toggle('active', this.snapGrid);
-      btnSnapGrid.textContent = this.snapGrid ? '🧲 Snap 5%' : '🔓 Free Draw';
-      this.showToast(this.snapGrid ? 'Grid Snapping (5%) enabled' : 'Freeform Wall Drawing');
+      btnSnapGrid.textContent = this.snapGrid ? '🧲 Mesh Snap' : '🔓 Free Draw';
+      this.showToast(this.snapGrid ? 'Mesh Vertex Snapping (Spacetime Grid) Enabled' : 'Freeform Wall Drawing');
     });
 
     // Clear All Walls

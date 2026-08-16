@@ -4,6 +4,8 @@
  * Supports dual-format specifications: Desktop (16:10 / 16:9) vs. Mobile (9:16 portrait).
  */
 
+const ALL_ENTITY_TYPES = ['standard', 'mega', 'splitter', 'vortex', 'longburner', 'speedster', 'catalyst'];
+
 export function resolveLevelConfig(levelData, platform = 'desktop') {
   if (!levelData) return null;
   const p = platform.toLowerCase();
@@ -16,11 +18,11 @@ export function resolveLevelConfig(levelData, platform = 'desktop') {
 
   let fmt = null;
   if (levelData.formats && levelData.formats[p]) {
-    fmt = levelData.formats[p];
+    fmt = JSON.parse(JSON.stringify(levelData.formats[p]));
   } else if (p === 'mobile' && levelData.mobile) {
-    fmt = levelData.mobile;
+    fmt = JSON.parse(JSON.stringify(levelData.mobile));
   } else if (p === 'desktop' && levelData.desktop) {
-    fmt = levelData.desktop;
+    fmt = JSON.parse(JSON.stringify(levelData.desktop));
   } else {
     // Fallback to top-level properties
     fmt = {
@@ -33,6 +35,7 @@ export function resolveLevelConfig(levelData, platform = 'desktop') {
       parTime: levelData.parTime || 5.0,
       charges: levelData.charges || 1,
       distribution: levelData.distribution || { standard: 8 },
+      bodies: levelData.bodies || null,
       walls: levelData.walls || []
     };
 
@@ -52,6 +55,33 @@ export function resolveLevelConfig(levelData, platform = 'desktop') {
       fmt.target = Math.max(1, Math.round(fmt.target * 0.7));
       fmt.stars = [fmt.target, Math.max(2, Math.round(fmt.stars[1] * 0.7)), Math.max(3, Math.round(fmt.stars[2] * 0.7))];
     }
+  }
+
+  // Canonicalize per-body configuration { count, size, speed }
+  const defaultSize = fmt.bodySizeScale || (p === 'mobile' ? 1.15 : 1.0);
+  const bodies = {};
+  let totalCount = 0;
+  const dist = {};
+
+  ALL_ENTITY_TYPES.forEach(type => {
+    if (fmt.bodies && fmt.bodies[type]) {
+      const b = fmt.bodies[type];
+      const count = typeof b === 'number' ? b : (b.count || 0);
+      const size = typeof b === 'object' && b.size !== undefined ? b.size : defaultSize;
+      const speed = typeof b === 'object' && b.speed !== undefined ? b.speed : 1.0;
+      bodies[type] = { count, size, speed };
+    } else {
+      const count = (fmt.distribution && fmt.distribution[type]) || 0;
+      bodies[type] = { count, size: defaultSize, speed: 1.0 };
+    }
+    dist[type] = bodies[type].count;
+    totalCount += bodies[type].count;
+  });
+
+  fmt.bodies = bodies;
+  fmt.distribution = dist;
+  if (totalCount > 0) {
+    fmt.totalParticles = totalCount;
   }
 
   return { ...meta, ...fmt };

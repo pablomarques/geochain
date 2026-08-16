@@ -182,13 +182,14 @@ export function drawObstacleWall(ctx, x1, y1, x2, y2, scale = 1.0) {
 }
 
 export class Particle {
-  constructor(x, y, typeId = 'standard', baseSpeed = 2.4, arena = { x: 0, y: 0, width: 960, height: 600 }, scale = 1.0, bodyScale = 1.0) {
+  constructor(x, y, typeId = 'standard', baseSpeed = 2.4, arena = { x: 0, y: 0, width: 960, height: 600 }, scale = 1.0, bodyScale = 1.0, speedScale = 1.0) {
     this.x = x;
     this.y = y;
     this.type = PARTICLE_TYPES[typeId] || PARTICLE_TYPES.standard;
     this.arena = arena;
     this.scale = scale;
     this.bodyScale = bodyScale || 1.0;
+    this.speedScale = speedScale || 1.0;
 
     // Physical radius scaled proportionally to arena and body size multiplier
     this.radius = this.type.radius * this.bodyScale * scale;
@@ -196,7 +197,7 @@ export class Particle {
     // Base speed scaled proportionally to preserve traversal time
     this.baseSpeed = baseSpeed;
     const angle = Math.random() * Math.PI * 2;
-    this.speed = baseSpeed * this.type.speedMultiplier * scale;
+    this.speed = baseSpeed * this.type.speedMultiplier * this.speedScale * scale;
     this.vx = Math.cos(angle) * this.speed;
     this.vy = Math.sin(angle) * this.speed;
 
@@ -215,9 +216,12 @@ export class Particle {
   }
 
   // Smoothly reposition and rescale physics on window resize
-  rescale(newArena, newScale, oldArena, bodyScale = null) {
+  rescale(newArena, newScale, oldArena, bodyScale = null, speedScale = null) {
     if (bodyScale !== null) {
       this.bodyScale = bodyScale;
+    }
+    if (speedScale !== null) {
+      this.speedScale = speedScale;
     }
 
     if (oldArena && oldArena.width > 0 && oldArena.height > 0) {
@@ -235,7 +239,7 @@ export class Particle {
     // Rescale velocity vector
     this.vx *= scaleRatio;
     this.vy *= scaleRatio;
-    this.speed = this.baseSpeed * this.type.speedMultiplier * newScale;
+    this.speed = this.baseSpeed * this.type.speedMultiplier * this.speedScale * newScale;
   }
 
   update(dt, speedMultiplier = 1.0, walls = []) {

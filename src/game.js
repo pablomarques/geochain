@@ -409,18 +409,21 @@ export class ChainReactionGame {
     this.particles = [];
 
     const typesToSpawn = [];
-    for (const [typeId, count] of Object.entries(lvl.distribution || {})) {
+    for (const [typeId, bodySpec] of Object.entries(lvl.bodies || {})) {
+      const count = typeof bodySpec === 'number' ? bodySpec : (bodySpec.count || 0);
+      const size = typeof bodySpec === 'object' && bodySpec.size !== undefined ? bodySpec.size : this.bodySizeScale;
+      const speedScale = typeof bodySpec === 'object' && bodySpec.speed !== undefined ? bodySpec.speed : 1.0;
       for (let i = 0; i < count; i++) {
-        typesToSpawn.push(typeId);
+        typesToSpawn.push({ typeId, size, speedScale });
       }
     }
 
     typesToSpawn.sort(() => Math.random() - 0.5);
-    typesToSpawn.forEach(typeId => {
+    typesToSpawn.forEach(item => {
       const margin = 28 * this.scale;
       const x = this.arena.x + margin + Math.random() * (this.arena.width - margin * 2);
       const y = this.arena.y + margin + Math.random() * (this.arena.height - margin * 2);
-      this.particles.push(new Particle(x, y, typeId, speed, this.arena, this.scale, this.bodySizeScale));
+      this.particles.push(new Particle(x, y, item.typeId, speed, this.arena, this.scale, item.size, item.speedScale));
     });
 
     this.notifyHUD();

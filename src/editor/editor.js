@@ -39,13 +39,23 @@ const btnTargetDesktop = document.getElementById('btn-target-desktop');
 const btnTargetMobile = document.getElementById('btn-target-mobile');
 const btnSyncFormats = document.getElementById('btn-sync-formats');
 
-// Entity Sliders & Counter Labels
+// Per-Body Entity Sliders & Counter Labels
 const entityTypes = ['standard', 'mega', 'splitter', 'vortex', 'longburner', 'speedster', 'catalyst'];
 const entitySliders = {};
+const entitySizeSliders = {};
+const entitySpeedSliders = {};
 const entityValueLabels = {};
+const entitySizeLabels = {};
+const entitySpeedLabels = {};
+
 entityTypes.forEach(type => {
   entitySliders[type] = document.getElementById(`slider-ent-${type}`);
+  entitySizeSliders[type] = document.getElementById(`slider-size-${type}`);
+  entitySpeedSliders[type] = document.getElementById(`slider-speed-${type}`);
+
   entityValueLabels[type] = document.getElementById(`val-ent-${type}`);
+  entitySizeLabels[type] = document.getElementById(`val-size-${type}`);
+  entitySpeedLabels[type] = document.getElementById(`val-speed-${type}`);
 });
 
 // Physics, Size & Star Targets
@@ -173,6 +183,7 @@ class StudioController {
           parTime: lvl.parTime || 5.0,
           charges: lvl.charges || 1,
           distribution: lvl.distribution || { standard: 8 },
+          bodies: {},
           walls: lvl.walls || []
         },
         mobile: {
@@ -185,6 +196,7 @@ class StudioController {
           parTime: lvl.parTime || 5.0,
           charges: lvl.charges || 1,
           distribution: { standard: Math.max(4, Math.round((lvl.totalParticles || 8) * 0.7)) },
+          bodies: {},
           walls: lvl.walls ? JSON.parse(JSON.stringify(lvl.walls)) : []
         }
       };
@@ -196,7 +208,22 @@ class StudioController {
   }
 
   get activeFormatSpec() {
-    return this.activeLevel.formats[this.editingFormat];
+    const spec = this.activeLevel.formats[this.editingFormat];
+    if (!spec.bodies) spec.bodies = {};
+    const defaultSize = spec.bodySizeScale || (this.editingFormat === 'mobile' ? 1.15 : 1.0);
+    
+    entityTypes.forEach(type => {
+      if (!spec.bodies[type]) {
+        const count = (spec.distribution && spec.distribution[type]) || 0;
+        spec.bodies[type] = {
+          count,
+          size: defaultSize,
+          speed: 1.0
+        };
+      }
+    });
+
+    return spec;
   }
 
   init() {
@@ -320,6 +347,7 @@ class StudioController {
           parTime: +(4.5 + newStageNum * 0.5).toFixed(1),
           charges: newStageNum > 9 ? 2 : 1,
           distribution: { standard: Math.min(80, 10 + newStageNum * 5) },
+          bodies: { standard: { count: Math.min(80, 10 + newStageNum * 5), size: 1.0, speed: 1.0 } },
           walls: []
         },
         mobile: {
@@ -332,6 +360,7 @@ class StudioController {
           parTime: +(4.5 + newStageNum * 0.5).toFixed(1),
           charges: newStageNum > 9 ? 2 : 1,
           distribution: { standard: Math.min(55, 8 + newStageNum * 4) },
+          bodies: { standard: { count: Math.min(55, 8 + newStageNum * 4), size: 1.15, speed: 1.0 } },
           walls: []
         }
       }
@@ -380,21 +409,30 @@ class StudioController {
     btnTargetDesktop.classList.toggle('active', this.editingFormat === 'desktop');
     btnTargetMobile.classList.toggle('active', this.editingFormat === 'mobile');
 
-    // Entity Distribution
+    // Per-Body Controls (Qty, Size, Speed)
     entityTypes.forEach(type => {
-      const count = (spec.distribution && spec.distribution[type]) || 0;
-      entitySliders[type].value = count;
-      entityValueLabels[type].textContent = count;
+      const bodySpec = spec.bodies[type] || { count: 0, size: 1.0, speed: 1.0 };
+      const count = bodySpec.count || 0;
+      const size = bodySpec.size !== undefined ? bodySpec.size : 1.0;
+      const speed = bodySpec.speed !== undefined ? bodySpec.speed : 1.0;
+
+      if (entitySliders[type]) entitySliders[type].value = count;
+      if (entitySizeSliders[type]) entitySizeSliders[type].value = size;
+      if (entitySpeedSliders[type]) entitySpeedSliders[type].value = speed;
+
+      if (entityValueLabels[type]) entityValueLabels[type].textContent = count;
+      if (entitySizeLabels[type]) entitySizeLabels[type].textContent = `${size.toFixed(2)}x`;
+      if (entitySpeedLabels[type]) entitySpeedLabels[type].textContent = `${speed.toFixed(2)}x`;
     });
 
     this.updateTotalParticlesBadge();
 
-    // Velocity
+    // Global Base Velocity
     const speed = spec.baseSpeed || 2.4;
     sliderBaseSpeed.value = speed;
     labelSpeedTier.textContent = `${speed} (${spec.speedLabel || this.getSpeedLabel(speed)})`;
 
-    // Body Size Multiplier
+    // Global Base Body Size Multiplier
     const bodyScale = spec.bodySizeScale !== undefined ? spec.bodySizeScale : (this.editingFormat === 'mobile' ? 1.15 : 1.0);
     sliderBodyScale.value = bodyScale;
     this.updateBodyScaleLabel(bodyScale);
@@ -427,11 +465,13 @@ class StudioController {
 
   updateTotalParticlesBadge() {
     let total = 0;
+    const spec = this.activeFormatSpec;
     entityTypes.forEach(type => {
-      total += parseInt(entitySliders[type].value, 10);
+      const b = spec.bodies[type];
+      total += b ? b.count : 0;
     });
     totalParticlesBadge.textContent = `${total} Bodies`;
-    this.activeFormatSpec.totalParticles = total;
+    spec.totalParticles = total;
   }
 
   getSpeedLabel(speed) {
@@ -452,7 +492,7 @@ class StudioController {
     const spec = this.activeFormatSpec;
     let total = 0;
     entityTypes.forEach(type => {
-      total += parseInt(entitySliders[type].value, 10);
+      total += spec.bodies[type] ? spec.bodies[type].count : 0;
     });
     if (total === 0) total = 10;
 
@@ -486,7 +526,6 @@ class StudioController {
     this.editingFormat = format;
     const targetViewport = format === 'mobile' ? 'mobile-portrait' : 'desktop-16-10';
     
-    // Update Viewport header buttons
     formatBtns.forEach(btn => {
       btn.classList.toggle('active', btn.dataset.format === targetViewport);
     });
@@ -502,7 +541,6 @@ class StudioController {
     const target = source === 'desktop' ? 'mobile' : 'desktop';
     const sourceSpec = this.activeLevel.formats[source];
 
-    // Deep copy
     this.activeLevel.formats[target] = JSON.parse(JSON.stringify(sourceSpec));
     this.showToast(`Copied ${source.toUpperCase()} spec to ${target.toUpperCase()}!`);
   }
@@ -567,21 +605,25 @@ class StudioController {
       return seed / 233280;
     };
 
-    const speed = spec.baseSpeed || 2.4;
-    const bodyScale = spec.bodySizeScale !== undefined ? spec.bodySizeScale : (this.editingFormat === 'mobile' ? 1.15 : 1.0);
+    const baseSpeed = spec.baseSpeed || 2.4;
+    const defaultBodyScale = spec.bodySizeScale !== undefined ? spec.bodySizeScale : (this.editingFormat === 'mobile' ? 1.15 : 1.0);
+    
     const typesToSpawn = [];
-    for (const [typeId, count] of Object.entries(spec.distribution || {})) {
+    for (const [typeId, bodySpec] of Object.entries(spec.bodies || {})) {
+      const count = typeof bodySpec === 'number' ? bodySpec : (bodySpec.count || 0);
+      const size = typeof bodySpec === 'object' && bodySpec.size !== undefined ? bodySpec.size : defaultBodyScale;
+      const speedScale = typeof bodySpec === 'object' && bodySpec.speed !== undefined ? bodySpec.speed : 1.0;
       for (let i = 0; i < count; i++) {
-        typesToSpawn.push(typeId);
+        typesToSpawn.push({ typeId, size, speedScale });
       }
     }
 
     typesToSpawn.sort(() => rng() - 0.5);
-    typesToSpawn.forEach(typeId => {
+    typesToSpawn.forEach(item => {
       const margin = 28 * this.scale;
       const x = this.arena.x + margin + rng() * (this.arena.width - margin * 2);
       const y = this.arena.y + margin + rng() * (this.arena.height - margin * 2);
-      this.particles.push(new Particle(x, y, typeId, speed, this.arena, this.scale, bodyScale));
+      this.particles.push(new Particle(x, y, item.typeId, baseSpeed, this.arena, this.scale, item.size, item.speedScale));
     });
 
     if (this.activeTool === 'spark') {
@@ -1046,7 +1088,7 @@ class StudioController {
         id,
         title: 'Custom Campaign',
         tagline: 'Authored in GeoChain Studio',
-        description: 'Custom puzzle sequence with multi-platform calibration.',
+        description: 'Custom puzzle sequence with granular per-body physics.',
         badge: '✨',
         color: '#facc15',
         author: 'Designer',
@@ -1067,6 +1109,7 @@ class StudioController {
                 parTime: 5.0,
                 charges: 1,
                 distribution: { standard: 12 },
+                bodies: { standard: { count: 12, size: 1.0, speed: 1.0 } },
                 walls: []
               },
               mobile: {
@@ -1079,6 +1122,7 @@ class StudioController {
                 parTime: 5.0,
                 charges: 1,
                 distribution: { standard: 9 },
+                bodies: { standard: { count: 9, size: 1.15, speed: 1.0 } },
                 walls: []
               }
             }
@@ -1114,17 +1158,44 @@ class StudioController {
       this.activeLevel.tip = e.target.value;
     });
 
-    // Entity Sliders
+    // Per-Body Control Event Listeners (Qty, Size, Speed)
     entityTypes.forEach(type => {
-      entitySliders[type].addEventListener('input', (e) => {
-        const val = parseInt(e.target.value, 10);
-        entityValueLabels[type].textContent = val;
-        if (!this.activeFormatSpec.distribution) this.activeFormatSpec.distribution = {};
-        this.activeFormatSpec.distribution[type] = val;
-        this.updateTotalParticlesBadge();
-        this.renderLevelSequenceList();
-        this.respawnSimulation();
-      });
+      // 1. Quantity Slider
+      if (entitySliders[type]) {
+        entitySliders[type].addEventListener('input', (e) => {
+          const val = parseInt(e.target.value, 10);
+          entityValueLabels[type].textContent = val;
+          if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0 };
+          this.activeFormatSpec.bodies[type].count = val;
+          if (!this.activeFormatSpec.distribution) this.activeFormatSpec.distribution = {};
+          this.activeFormatSpec.distribution[type] = val;
+          this.updateTotalParticlesBadge();
+          this.renderLevelSequenceList();
+          this.respawnSimulation();
+        });
+      }
+
+      // 2. Size Scale Slider
+      if (entitySizeSliders[type]) {
+        entitySizeSliders[type].addEventListener('input', (e) => {
+          const val = parseFloat(e.target.value);
+          entitySizeLabels[type].textContent = `${val.toFixed(2)}x`;
+          if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0 };
+          this.activeFormatSpec.bodies[type].size = val;
+          this.respawnSimulation();
+        });
+      }
+
+      // 3. Speed Scale Slider
+      if (entitySpeedSliders[type]) {
+        entitySpeedSliders[type].addEventListener('input', (e) => {
+          const val = parseFloat(e.target.value);
+          entitySpeedLabels[type].textContent = `${val.toFixed(2)}x`;
+          if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0 };
+          this.activeFormatSpec.bodies[type].speed = val;
+          this.respawnSimulation();
+        });
+      }
     });
 
     // Speed Slider
@@ -1138,7 +1209,7 @@ class StudioController {
       this.respawnSimulation();
     });
 
-    // Body Size Multiplier Slider
+    // Global Base Body Size Multiplier Slider
     sliderBodyScale.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value);
       this.activeFormatSpec.bodySizeScale = val;
@@ -1207,7 +1278,7 @@ class StudioController {
     btnCopyLevelJson.addEventListener('click', () => {
       const json = JSON.stringify(this.activeLevel, null, 2);
       navigator.clipboard.writeText(json);
-      this.showToast('Copied active Level JSON (Dual Spec) to clipboard!');
+      this.showToast('Copied active Level JSON (with per-body tuning) to clipboard!');
     });
 
     btnExportCampaignJson.addEventListener('click', () => {
@@ -1243,7 +1314,7 @@ class StudioController {
           this.respawnSimulation();
           modalJsonSync.classList.remove('show');
           this.showToast(`Imported campaign "${parsed.title}"!`);
-        } else if (parsed.formats || parsed.distribution) {
+        } else if (parsed.formats || parsed.distribution || parsed.bodies) {
           this.activeCampaign.levels.push(parsed);
           this.activeCampaign.levels.forEach((lvl, i) => { lvl.level = i + 1; });
           this.selectLevel(this.activeCampaign.levels.length - 1);

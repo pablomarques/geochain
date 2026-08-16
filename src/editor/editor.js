@@ -3,6 +3,7 @@ import { Explosion, SparklePool } from '../explosion.js';
 import { ElasticSpacetimeGrid } from '../grid.js';
 import { CAMPAIGNS, resolveLevelConfig } from '../levels.js';
 import { soundEngine } from '../audio.js';
+import { FloatingText } from '../game.js';
 
 // DOM Selectors
 const canvas = document.getElementById('studio-canvas');
@@ -815,80 +816,84 @@ class StudioController {
     const rawDt = Math.min((time - this.lastFrameTime) / 1000, 0.05);
     this.lastFrameTime = time;
 
-    const dt = rawDt * this.simSpeed;
-    this.updatePhysics(dt);
+    try {
+      const dt = rawDt * this.simSpeed;
+      this.updatePhysics(dt);
 
-    const ctx = this.ctx;
-    ctx.clearRect(0, 0, this.arena.width, this.arena.height);
+      const ctx = this.ctx;
+      ctx.clearRect(0, 0, this.arena.width, this.arena.height);
 
-    ctx.save();
-    // 1. Spacetime Grid
-    this.grid.draw(ctx);
-
-    // 2. Neon Perimeter Border
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
-    ctx.lineWidth = Math.max(1.2, 1.8 * this.scale);
-    ctx.strokeRect(this.arena.x, this.arena.y, this.arena.width, this.arena.height);
-
-    // 3. Render Level Obstacle Barrier Walls
-    const walls = this.activeFormatSpec.walls || [];
-    for (let i = 0; i < walls.length; i++) {
-      const w = walls[i];
-      const wx1 = this.arena.x + w.x1 * this.arena.width;
-      const wy1 = this.arena.y + w.y1 * this.arena.height;
-      const wx2 = this.arena.x + w.x2 * this.arena.width;
-      const wy2 = this.arena.y + w.y2 * this.arena.height;
-      drawObstacleWall(ctx, wx1, wy1, wx2, wy2, this.scale);
-    }
-
-    // Render In-Progress Drawn Wall Preview
-    if (this.isDrawingWall && this.wallStartPos && this.wallCurrentPos) {
-      const wx1 = this.arena.x + this.wallStartPos.x * this.arena.width;
-      const wy1 = this.arena.y + this.wallStartPos.y * this.arena.height;
-      const wx2 = this.arena.x + this.wallCurrentPos.x * this.arena.width;
-      const wy2 = this.arena.y + this.wallCurrentPos.y * this.arena.height;
-      
       ctx.save();
-      ctx.strokeStyle = '#e879f9';
-      ctx.lineWidth = Math.max(2, 3.5 * this.scale);
-      ctx.setLineDash([8 * this.scale, 6 * this.scale]);
-      ctx.beginPath();
-      ctx.moveTo(wx1, wy1);
-      ctx.lineTo(wx2, wy2);
-      ctx.stroke();
+      // 1. Spacetime Grid
+      this.grid.draw(ctx);
 
-      ctx.fillStyle = '#ffffff';
-      [ [wx1, wy1], [wx2, wy2] ].forEach(([nx, ny]) => {
+      // 2. Neon Perimeter Border
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+      ctx.lineWidth = Math.max(1.2, 1.8 * this.scale);
+      ctx.strokeRect(this.arena.x, this.arena.y, this.arena.width, this.arena.height);
+
+      // 3. Render Level Obstacle Barrier Walls
+      const walls = this.activeFormatSpec.walls || [];
+      for (let i = 0; i < walls.length; i++) {
+        const w = walls[i];
+        const wx1 = this.arena.x + w.x1 * this.arena.width;
+        const wy1 = this.arena.y + w.y1 * this.arena.height;
+        const wx2 = this.arena.x + w.x2 * this.arena.width;
+        const wy2 = this.arena.y + w.y2 * this.arena.height;
+        drawObstacleWall(ctx, wx1, wy1, wx2, wy2, this.scale);
+      }
+
+      // Render In-Progress Drawn Wall Preview
+      if (this.isDrawingWall && this.wallStartPos && this.wallCurrentPos) {
+        const wx1 = this.arena.x + this.wallStartPos.x * this.arena.width;
+        const wy1 = this.arena.y + this.wallStartPos.y * this.arena.height;
+        const wx2 = this.arena.x + this.wallCurrentPos.x * this.arena.width;
+        const wy2 = this.arena.y + this.wallCurrentPos.y * this.arena.height;
+        
+        ctx.save();
+        ctx.strokeStyle = '#e879f9';
+        ctx.lineWidth = Math.max(2, 3.5 * this.scale);
+        ctx.setLineDash([8 * this.scale, 6 * this.scale]);
         ctx.beginPath();
-        ctx.arc(nx, ny, 5 * this.scale, 0, Math.PI * 2);
-        ctx.fill();
-      });
+        ctx.moveTo(wx1, wy1);
+        ctx.lineTo(wx2, wy2);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        [ [wx1, wy1], [wx2, wy2] ].forEach(([nx, ny]) => {
+          ctx.beginPath();
+          ctx.arc(nx, ny, 5 * this.scale, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.restore();
+      }
+
+      // 4. Explosions
+      for (let i = 0; i < this.explosions.length; i++) {
+        this.explosions[i].draw(ctx);
+      }
+
+      // 5. Shrapnels
+      for (let i = 0; i < this.shrapnels.length; i++) {
+        this.shrapnels[i].draw(ctx);
+      }
+
+      // 6. Particles
+      for (let i = 0; i < this.particles.length; i++) {
+        this.particles[i].draw(ctx);
+      }
+
+      // 7. Sparkle Pool
+      this.sparklePool.draw(ctx);
+
+      // 8. Floating Texts
+      for (let i = 0; i < this.floatingTexts.length; i++) {
+        this.floatingTexts[i].draw(ctx);
+      }
       ctx.restore();
+    } catch (err) {
+      console.error('Studio simulation frame error:', err);
     }
-
-    // 4. Explosions
-    for (let i = 0; i < this.explosions.length; i++) {
-      this.explosions[i].draw(ctx);
-    }
-
-    // 5. Shrapnels
-    for (let i = 0; i < this.shrapnels.length; i++) {
-      this.shrapnels[i].draw(ctx);
-    }
-
-    // 6. Particles
-    for (let i = 0; i < this.particles.length; i++) {
-      this.particles[i].draw(ctx);
-    }
-
-    // 7. Sparkle Pool
-    this.sparklePool.draw(ctx);
-
-    // 8. Floating Texts
-    for (let i = 0; i < this.floatingTexts.length; i++) {
-      this.floatingTexts[i].draw(ctx);
-    }
-    ctx.restore();
 
     requestAnimationFrame(this.renderLoop.bind(this));
   }

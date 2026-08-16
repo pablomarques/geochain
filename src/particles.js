@@ -100,16 +100,98 @@ export const PARTICLE_TYPES = {
   }
 };
 
+/**
+ * Line segment collision and specular reflection
+ */
+export function checkSegmentCollision(x, y, vx, vy, radius, x1, y1, x2, y2) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 0.0001) return null;
+
+  const t = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / lenSq));
+  const closestX = x1 + t * dx;
+  const closestY = y1 + t * dy;
+
+  const distX = x - closestX;
+  const distY = y - closestY;
+  const distSq = distX * distX + distY * distY;
+
+  if (distSq < radius * radius && distSq > 0.000001) {
+    const dist = Math.sqrt(distSq);
+    const nx = distX / dist;
+    const ny = distY / dist;
+
+    const dot = vx * nx + vy * ny;
+    if (dot < 0) { // Moving towards the wall
+      const newVx = vx - 2 * dot * nx;
+      const newVy = vy - 2 * dot * ny;
+      const newX = closestX + nx * (radius + 0.5);
+      const newY = closestY + ny * (radius + 0.5);
+      return { x: newX, y: newY, vx: newVx, vy: newVy };
+    }
+  }
+  return null;
+}
+
+/**
+ * Render glowing barrier obstacle wall
+ */
+export function drawObstacleWall(ctx, x1, y1, x2, y2, scale = 1.0) {
+  ctx.save();
+  // Outer Neon Glow
+  ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+  ctx.lineWidth = Math.max(3, 7.0 * scale);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+
+  // Core Solid Neon
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = Math.max(1.8, 3.0 * scale);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+
+  // Bright White Inner Core Line
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = Math.max(0.8, 1.2 * scale);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+
+  // End Node Diamonds
+  const nodeR = Math.max(2.5, 4.5 * scale);
+  [ [x1, y1], [x2, y2] ].forEach(([nx, ny]) => {
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = Math.max(1, 1.5 * scale);
+    ctx.beginPath();
+    ctx.moveTo(nx, ny - nodeR);
+    ctx.lineTo(nx + nodeR, ny);
+    ctx.lineTo(nx, ny + nodeR);
+    ctx.lineTo(nx - nodeR, ny);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
 export class Particle {
-  constructor(x, y, typeId = 'standard', baseSpeed = 2.4, arena = { x: 0, y: 0, width: 960, height: 600 }, scale = 1.0) {
+  constructor(x, y, typeId = 'standard', baseSpeed = 2.4, arena = { x: 0, y: 0, width: 960, height: 600 }, scale = 1.0, bodyScale = 1.0) {
     this.x = x;
     this.y = y;
     this.type = PARTICLE_TYPES[typeId] || PARTICLE_TYPES.standard;
     this.arena = arena;
     this.scale = scale;
+    this.bodyScale = bodyScale || 1.0;
 
-    // Physical radius scaled proportionally to arena
-    this.radius = this.type.radius * scale;
+    // Physical radius scaled proportionally to arena and body size multiplier
+    this.radius = this.type.radius * this.bodyScale * scale;
 
     // Base speed scaled proportionally to preserve traversal time
     this.baseSpeed = baseSpeed;
@@ -133,8 +215,11 @@ export class Particle {
   }
 
   // Smoothly reposition and rescale physics on window resize
-  rescale(newArena, newScale, oldArena) {
-    // Preserve relative normalized position inside arena
+  rescale(newArena, newScale, oldArena, bodyScale = null) {
+    if (bodyScale !== null) {
+      this.bodyScale = bodyScale;
+    }
+
     if (oldArena && oldArena.width > 0 && oldArena.height > 0) {
       const relX = (this.x - oldArena.x) / oldArena.width;
       const relY = (this.y - oldArena.y) / oldArena.height;
@@ -145,7 +230,7 @@ export class Particle {
     this.arena = newArena;
     const scaleRatio = newScale / (this.scale || 1.0);
     this.scale = newScale;
-    this.radius = this.type.radius * newScale;
+    this.radius = this.type.radius * this.bodyScale * newScale;
 
     // Rescale velocity vector
     this.vx *= scaleRatio;
@@ -153,7 +238,7 @@ export class Particle {
     this.speed = this.baseSpeed * this.type.speedMultiplier * newScale;
   }
 
-  update(dt, speedMultiplier = 1.0) {
+  update(dt, speedMultiplier = 1.0, walls = []) {
     if (!this.alive) return;
 
     // Update Ring Buffer
@@ -172,7 +257,7 @@ export class Particle {
     this.x += this.vx * speedMultiplier * (dt * 60);
     this.y += this.vy * speedMultiplier * (dt * 60);
 
-    // Arena Reflections
+    // 1. Arena Outer Boundary Reflections
     const r = this.radius;
     const minX = this.arena.x + r;
     const maxX = this.arena.x + this.arena.width - r;
@@ -193,6 +278,25 @@ export class Particle {
     } else if (this.y >= maxY) {
       this.y = maxY;
       this.vy = -Math.abs(this.vy);
+    }
+
+    // 2. Obstacle Barrier Wall Collisions
+    if (walls && walls.length > 0) {
+      for (let i = 0; i < walls.length; i++) {
+        const w = walls[i];
+        const x1 = this.arena.x + w.x1 * this.arena.width;
+        const y1 = this.arena.y + w.y1 * this.arena.height;
+        const x2 = this.arena.x + w.x2 * this.arena.width;
+        const y2 = this.arena.y + w.y2 * this.arena.height;
+
+        const col = checkSegmentCollision(this.x, this.y, this.vx, this.vy, this.radius, x1, y1, x2, y2);
+        if (col) {
+          this.x = col.x;
+          this.y = col.y;
+          this.vx = col.vx;
+          this.vy = col.vy;
+        }
+      }
     }
   }
 
@@ -387,7 +491,7 @@ export class Shrapnel {
     this.arena = newArena;
   }
 
-  update(dt) {
+  update(dt, walls = []) {
     if (!this.alive) return;
     this.life += dt;
     if (this.life >= this.maxLife) {
@@ -411,6 +515,25 @@ export class Shrapnel {
     if (this.y <= minY || this.y >= maxY) {
       this.vy = -this.vy;
       this.y = Math.max(minY, Math.min(maxY, this.y));
+    }
+
+    // Obstacle Wall collisions for shrapnel
+    if (walls && walls.length > 0) {
+      for (let i = 0; i < walls.length; i++) {
+        const w = walls[i];
+        const x1 = this.arena.x + w.x1 * this.arena.width;
+        const y1 = this.arena.y + w.y1 * this.arena.height;
+        const x2 = this.arena.x + w.x2 * this.arena.width;
+        const y2 = this.arena.y + w.y2 * this.arena.height;
+
+        const col = checkSegmentCollision(this.x, this.y, this.vx, this.vy, this.radius, x1, y1, x2, y2);
+        if (col) {
+          this.x = col.x;
+          this.y = col.y;
+          this.vx = col.vx;
+          this.vy = col.vy;
+        }
+      }
     }
   }
 

@@ -1,4 +1,4 @@
-import { Particle, Shrapnel, PARTICLE_TYPES, REFERENCE_ARENA } from '../particles.js';
+import { Particle, Shrapnel, PARTICLE_TYPES, REFERENCE_ARENA, drawObstacleWall, checkSegmentCollision } from '../particles.js';
 import { Explosion, SparklePool } from '../explosion.js';
 import { ElasticSpacetimeGrid } from '../grid.js';
 import { CAMPAIGNS } from '../levels.js';
@@ -43,9 +43,11 @@ entityTypes.forEach(type => {
   entityValueLabels[type] = document.getElementById(`val-ent-${type}`);
 });
 
-// Physics & Star Targets
+// Physics, Size & Star Targets
 const sliderBaseSpeed = document.getElementById('slider-base-speed');
 const labelSpeedTier = document.getElementById('label-speed-tier');
+const sliderBodyScale = document.getElementById('slider-body-scale');
+const labelBodyScale = document.getElementById('label-body-scale');
 const chargeBtns = document.querySelectorAll('.charge-btn');
 const inputQuotaTarget = document.getElementById('input-quota-target');
 const inputQuotaStar2 = document.getElementById('input-quota-star2');
@@ -53,10 +55,15 @@ const inputQuotaStar3 = document.getElementById('input-quota-star3');
 const inputParTime = document.getElementById('input-par-time');
 const btnAutocalcQuotas = document.getElementById('btn-autocalc-quotas');
 
-// Simulation Controls & Telemetry
+// Simulation Controls, Tools & Telemetry
 const btnSimReset = document.getElementById('btn-sim-reset');
 const btnLockSeed = document.getElementById('btn-lock-seed');
 const speedBtns = document.querySelectorAll('.sim-speed-btn');
+const toolPillBtns = document.querySelectorAll('.tool-pill-btn');
+const btnSnapGrid = document.getElementById('btn-snap-grid');
+const btnClearWalls = document.getElementById('btn-clear-walls');
+const wallCountBadge = document.getElementById('wall-count-badge');
+
 const telPopped = document.getElementById('tel-popped');
 const telCombo = document.getElementById('tel-combo');
 const telTime = document.getElementById('tel-time');
@@ -77,7 +84,7 @@ const btnCopyTextarea = document.getElementById('btn-copy-textarea');
 const btnApplyJsonImport = document.getElementById('btn-apply-json-import');
 const btnCloseJsonModal = document.getElementById('btn-close-json-modal');
 
-// Studio State
+// Studio State Controller
 class StudioController {
   constructor() {
     this.campaigns = this.loadWorkingCampaigns();
@@ -87,6 +94,13 @@ class StudioController {
     this.simSpeed = 1.0;
     this.isSeedLocked = false;
     this.lockedSeed = Math.random();
+
+    // Tool Modes: 'spark', 'wall', 'erase'
+    this.activeTool = 'spark';
+    this.snapGrid = true;
+    this.isDrawingWall = false;
+    this.wallStartPos = null;
+    this.wallCurrentPos = null;
 
     // Simulation Physics State
     this.ctx = canvas.getContext('2d');
@@ -138,7 +152,10 @@ class StudioController {
 
   get activeLevel() {
     const levels = this.activeCampaign.levels;
-    return levels[this.activeLevelIndex] || levels[0];
+    const lvl = levels[this.activeLevelIndex] || levels[0];
+    if (!lvl.walls) lvl.walls = [];
+    if (lvl.bodySizeScale === undefined) lvl.bodySizeScale = 1.0;
+    return lvl;
   }
 
   init() {
@@ -181,12 +198,15 @@ class StudioController {
       const card = document.createElement('div');
       card.className = `level-item-card ${idx === this.activeLevelIndex ? 'active' : ''}`;
 
+      const wallCount = (lvl.walls && lvl.walls.length) ? ` • 🧱 ${lvl.walls.length}` : '';
+      const sizeTag = lvl.bodySizeScale && lvl.bodySizeScale !== 1.0 ? ` • ${lvl.bodySizeScale}x Size` : '';
+
       card.innerHTML = `
         <div class="level-item-left">
           <span class="level-badge-num">${lvl.level || (idx + 1)}</span>
           <div class="level-item-info">
             <span class="level-item-title">${lvl.title || `Stage ${idx + 1}`}</span>
-            <span class="level-item-sub">${lvl.totalParticles || 0} Bodies • ${lvl.speedLabel || 'Normal'}</span>
+            <span class="level-item-sub">${lvl.totalParticles || 0} Bodies • ${lvl.speedLabel || 'Normal'}${wallCount}${sizeTag}</span>
           </div>
         </div>
         <div class="level-reorder-btns">
@@ -252,9 +272,11 @@ class StudioController {
       totalParticles: Math.min(80, 10 + newStageNum * 5),
       baseSpeed: Math.max(1.1, +(4.6 - (newStageNum - 1) * 0.3).toFixed(1)),
       speedLabel: this.getSpeedLabel(Math.max(1.1, 4.6 - (newStageNum - 1) * 0.3)),
+      bodySizeScale: 1.0,
       parTime: +(4.5 + newStageNum * 0.5).toFixed(1),
       charges: newStageNum > 9 ? 2 : 1,
       distribution: { standard: Math.min(80, 10 + newStageNum * 5) },
+      walls: [],
       tip: 'New stage authored in GeoChain Studio.'
     };
 
@@ -304,11 +326,20 @@ class StudioController {
 
     this.updateTotalParticlesBadge();
 
-    // Velocity & Charges
+    // Velocity
     const speed = lvl.baseSpeed || 2.4;
     sliderBaseSpeed.value = speed;
     labelSpeedTier.textContent = `${speed} (${lvl.speedLabel || this.getSpeedLabel(speed)})`;
 
+    // Body Size Multiplier
+    const bodyScale = lvl.bodySizeScale !== undefined ? lvl.bodySizeScale : 1.0;
+    sliderBodyScale.value = bodyScale;
+    this.updateBodyScaleLabel(bodyScale);
+
+    // Wall Count Badge
+    wallCountBadge.textContent = (lvl.walls && lvl.walls.length) || 0;
+
+    // Charges
     chargeBtns.forEach(btn => {
       const c = parseInt(btn.dataset.charges, 10);
       btn.classList.toggle('active', c === (lvl.charges || 1));
@@ -320,6 +351,15 @@ class StudioController {
     inputQuotaStar2.value = stars[1] || Math.round(lvl.totalParticles * 0.5);
     inputQuotaStar3.value = stars[2] || Math.round(lvl.totalParticles * 0.75);
     inputParTime.value = lvl.parTime || 5.0;
+  }
+
+  updateBodyScaleLabel(val) {
+    let desc = 'Standard (1.0x)';
+    if (val <= 0.7) desc = `${val}x (Compact / Dense)`;
+    else if (val <= 1.15) desc = `${val}x (Standard)`;
+    else if (val <= 1.7) desc = `${val}x (Expanded)`;
+    else desc = `${val}x (Gigantic / High-Contact)`;
+    labelBodyScale.textContent = desc;
   }
 
   updateTotalParticlesBadge() {
@@ -355,7 +395,6 @@ class StudioController {
 
     const speed = parseFloat(sliderBaseSpeed.value);
 
-    // Fast bodies = high encounter clear rate; slow bodies = calculated lower pass quota
     let passRatio = 0.22;
     if (speed >= 4.0) passRatio = 0.12;
     else if (speed >= 3.0) passRatio = 0.28;
@@ -414,7 +453,6 @@ class StudioController {
       height: h
     };
 
-    // Calculate scale ratio relative to reference 960 width
     this.scale = w / REFERENCE_ARENA.width;
     this.grid.resize(this.arena, this.scale);
     this.respawnSimulation();
@@ -434,7 +472,6 @@ class StudioController {
     this.floatingTexts = [];
     this.particles = [];
 
-    // Seeded or Random generator
     let seed = this.isSeedLocked ? this.lockedSeed : Math.random();
     let rng = () => {
       seed = (seed * 9301 + 49297) % 233280;
@@ -442,6 +479,7 @@ class StudioController {
     };
 
     const speed = lvl.baseSpeed || 2.4;
+    const bodyScale = lvl.bodySizeScale !== undefined ? lvl.bodySizeScale : 1.0;
     const typesToSpawn = [];
     for (const [typeId, count] of Object.entries(lvl.distribution || {})) {
       for (let i = 0; i < count; i++) {
@@ -454,10 +492,20 @@ class StudioController {
       const margin = 28 * this.scale;
       const x = this.arena.x + margin + rng() * (this.arena.width - margin * 2);
       const y = this.arena.y + margin + rng() * (this.arena.height - margin * 2);
-      this.particles.push(new Particle(x, y, typeId, speed, this.arena, this.scale));
+      this.particles.push(new Particle(x, y, typeId, speed, this.arena, this.scale, bodyScale));
     });
 
-    clickPrompt.style.display = 'block';
+    if (this.activeTool === 'spark') {
+      clickPrompt.style.display = 'block';
+      clickPrompt.textContent = 'Click inside arena to ignite reaction';
+    } else if (this.activeTool === 'wall') {
+      clickPrompt.style.display = 'block';
+      clickPrompt.textContent = 'Click & drag inside arena to draw barrier walls';
+    } else {
+      clickPrompt.style.display = 'block';
+      clickPrompt.textContent = 'Click any barrier wall to erase it';
+    }
+
     this.updateTelemetryHUD();
   }
 
@@ -497,6 +545,8 @@ class StudioController {
       this.elapsedTime += dt;
     }
 
+    const walls = this.activeLevel.walls || [];
+
     // Explosions & Singularities
     for (let i = this.explosions.length - 1; i >= 0; i--) {
       const exp = this.explosions[i];
@@ -525,7 +575,7 @@ class StudioController {
       const p = this.particles[i];
       if (!p.alive) continue;
 
-      p.update(dt, 1.0);
+      p.update(dt, 1.0, walls);
 
       for (let e = 0; e < this.explosions.length; e++) {
         const exp = this.explosions[e];
@@ -556,7 +606,7 @@ class StudioController {
     // Shrapnel
     for (let s = this.shrapnels.length - 1; s >= 0; s--) {
       const shrapnel = this.shrapnels[s];
-      shrapnel.update(dt);
+      shrapnel.update(dt, walls);
       if (!shrapnel.alive) {
         this.shrapnels.splice(s, 1);
         continue;
@@ -626,6 +676,11 @@ class StudioController {
     telStars.textContent = starStr;
   }
 
+  snapCoord(relVal) {
+    if (!this.snapGrid) return relVal;
+    return Math.round(relVal / 0.05) * 0.05;
+  }
+
   renderLoop(time) {
     const rawDt = Math.min((time - this.lastFrameTime) / 1000, 0.05);
     this.lastFrameTime = time;
@@ -645,25 +700,63 @@ class StudioController {
     ctx.lineWidth = Math.max(1.2, 1.8 * this.scale);
     ctx.strokeRect(this.arena.x, this.arena.y, this.arena.width, this.arena.height);
 
-    // 3. Explosions
+    // 3. Render Level Obstacle Barrier Walls
+    const walls = this.activeLevel.walls || [];
+    for (let i = 0; i < walls.length; i++) {
+      const w = walls[i];
+      const wx1 = this.arena.x + w.x1 * this.arena.width;
+      const wy1 = this.arena.y + w.y1 * this.arena.height;
+      const wx2 = this.arena.x + w.x2 * this.arena.width;
+      const wy2 = this.arena.y + w.y2 * this.arena.height;
+      drawObstacleWall(ctx, wx1, wy1, wx2, wy2, this.scale);
+    }
+
+    // Render In-Progress Drawn Wall Preview
+    if (this.isDrawingWall && this.wallStartPos && this.wallCurrentPos) {
+      const wx1 = this.arena.x + this.wallStartPos.x * this.arena.width;
+      const wy1 = this.arena.y + this.wallStartPos.y * this.arena.height;
+      const wx2 = this.arena.x + this.wallCurrentPos.x * this.arena.width;
+      const wy2 = this.arena.y + this.wallCurrentPos.y * this.arena.height;
+      
+      // Dashed Guide
+      ctx.save();
+      ctx.strokeStyle = '#e879f9';
+      ctx.lineWidth = Math.max(2, 3.5 * this.scale);
+      ctx.setLineDash([8 * this.scale, 6 * this.scale]);
+      ctx.beginPath();
+      ctx.moveTo(wx1, wy1);
+      ctx.lineTo(wx2, wy2);
+      ctx.stroke();
+
+      // Nodes
+      ctx.fillStyle = '#ffffff';
+      [ [wx1, wy1], [wx2, wy2] ].forEach(([nx, ny]) => {
+        ctx.beginPath();
+        ctx.arc(nx, ny, 5 * this.scale, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+
+    // 4. Explosions
     for (let i = 0; i < this.explosions.length; i++) {
       this.explosions[i].draw(ctx);
     }
 
-    // 4. Shrapnels
+    // 5. Shrapnels
     for (let i = 0; i < this.shrapnels.length; i++) {
       this.shrapnels[i].draw(ctx);
     }
 
-    // 5. Particles
+    // 6. Particles
     for (let i = 0; i < this.particles.length; i++) {
       this.particles[i].draw(ctx);
     }
 
-    // 6. Sparkle Pool
+    // 7. Sparkle Pool
     this.sparklePool.draw(ctx);
 
-    // 7. Floating Texts
+    // 8. Floating Texts
     for (let i = 0; i < this.floatingTexts.length; i++) {
       this.floatingTexts[i].draw(ctx);
     }
@@ -691,12 +784,122 @@ class StudioController {
   }
 
   setupEventListeners() {
-    // Canvas Click Trigger
+    // Canvas Pointer Events (Supports Spark, Draw Wall, Erase Wall)
     canvas.addEventListener('pointerdown', (e) => {
       const rect = canvas.getBoundingClientRect();
-      const x = (e.clientX - rect.left) * (this.arena.width / rect.width);
-      const y = (e.clientY - rect.top) * (this.arena.height / rect.height);
-      this.triggerSpark(x, y);
+      const clickX = (e.clientX - rect.left) * (this.arena.width / rect.width);
+      const clickY = (e.clientY - rect.top) * (this.arena.height / rect.height);
+      const relX = (clickX - this.arena.x) / this.arena.width;
+      const relY = (clickY - this.arena.y) / this.arena.height;
+
+      if (this.activeTool === 'spark') {
+        this.triggerSpark(clickX, clickY);
+      } else if (this.activeTool === 'wall') {
+        this.isDrawingWall = true;
+        const sx = this.snapCoord(Math.max(0.02, Math.min(0.98, relX)));
+        const sy = this.snapCoord(Math.max(0.02, Math.min(0.98, relY)));
+        this.wallStartPos = { x: sx, y: sy };
+        this.wallCurrentPos = { x: sx, y: sy };
+      } else if (this.activeTool === 'erase') {
+        // Erase closest wall within tolerance
+        const walls = this.activeLevel.walls || [];
+        let erased = false;
+        for (let i = walls.length - 1; i >= 0; i--) {
+          const w = walls[i];
+          const wx1 = this.arena.x + w.x1 * this.arena.width;
+          const wy1 = this.arena.y + w.y1 * this.arena.height;
+          const wx2 = this.arena.x + w.x2 * this.arena.width;
+          const wy2 = this.arena.y + w.y2 * this.arena.height;
+          
+          const dx = wx2 - wx1;
+          const dy = wy2 - wy1;
+          const lenSq = dx * dx + dy * dy;
+          const t = Math.max(0, Math.min(1, ((clickX - wx1) * dx + (clickY - wy1) * dy) / (lenSq || 1)));
+          const qx = wx1 + t * dx;
+          const qy = wy1 + t * dy;
+          const distSq = (clickX - qx) * (clickX - qx) + (clickY - qy) * (clickY - qy);
+
+          if (distSq < (18 * this.scale) * (18 * this.scale)) {
+            walls.splice(i, 1);
+            erased = true;
+            this.showToast('Obstacle wall erased');
+            wallCountBadge.textContent = walls.length;
+            this.renderLevelSequenceList();
+            this.respawnSimulation();
+            break;
+          }
+        }
+      }
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (this.isDrawingWall && this.wallStartPos) {
+        const rect = canvas.getBoundingClientRect();
+        const clickX = (e.clientX - rect.left) * (this.arena.width / rect.width);
+        const clickY = (e.clientY - rect.top) * (this.arena.height / rect.height);
+        const relX = (clickX - this.arena.x) / this.arena.width;
+        const relY = (clickY - this.arena.y) / this.arena.height;
+
+        const cx = this.snapCoord(Math.max(0.02, Math.min(0.98, relX)));
+        const cy = this.snapCoord(Math.max(0.02, Math.min(0.98, relY)));
+        this.wallCurrentPos = { x: cx, y: cy };
+      }
+    });
+
+    window.addEventListener('pointerup', () => {
+      if (this.isDrawingWall && this.wallStartPos && this.wallCurrentPos) {
+        const dx = this.wallCurrentPos.x - this.wallStartPos.x;
+        const dy = this.wallCurrentPos.y - this.wallStartPos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist > 0.04) {
+          if (!this.activeLevel.walls) this.activeLevel.walls = [];
+          this.activeLevel.walls.push({
+            x1: +this.wallStartPos.x.toFixed(3),
+            y1: +this.wallStartPos.y.toFixed(3),
+            x2: +this.wallCurrentPos.x.toFixed(3),
+            y2: +this.wallCurrentPos.y.toFixed(3)
+          });
+          this.showToast('Added barrier wall obstacle');
+          wallCountBadge.textContent = this.activeLevel.walls.length;
+          this.renderLevelSequenceList();
+          this.respawnSimulation();
+        }
+        this.isDrawingWall = false;
+        this.wallStartPos = null;
+        this.wallCurrentPos = null;
+      }
+    });
+
+    // Tool Buttons (Spark / Wall / Erase)
+    toolPillBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        toolPillBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.activeTool = btn.dataset.tool;
+        this.respawnSimulation();
+      });
+    });
+
+    // Snap to Grid
+    btnSnapGrid.addEventListener('click', () => {
+      this.snapGrid = !this.snapGrid;
+      btnSnapGrid.classList.toggle('active', this.snapGrid);
+      btnSnapGrid.textContent = this.snapGrid ? '🧲 Snap 5%' : '🔓 Free Draw';
+      this.showToast(this.snapGrid ? 'Grid Snapping (5%) enabled' : 'Freeform Wall Drawing');
+    });
+
+    // Clear All Walls
+    btnClearWalls.addEventListener('click', () => {
+      if (this.activeLevel.walls && this.activeLevel.walls.length > 0) {
+        if (confirm(`Clear all ${this.activeLevel.walls.length} obstacle wall(s) in this stage?`)) {
+          this.activeLevel.walls = [];
+          wallCountBadge.textContent = '0';
+          this.renderLevelSequenceList();
+          this.respawnSimulation();
+          this.showToast('Cleared all obstacle walls');
+        }
+      }
     });
 
     // Keyboard Shortcuts
@@ -704,6 +907,12 @@ class StudioController {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (e.key === 'r' || e.key === 'R') {
         this.respawnSimulation();
+      } else if (e.key === 'w' || e.key === 'W') {
+        const wallBtn = document.getElementById('btn-tool-wall');
+        if (wallBtn) wallBtn.click();
+      } else if (e.key === ' ') {
+        const sparkBtn = document.getElementById('btn-tool-spark');
+        if (sparkBtn) sparkBtn.click();
       }
     });
 
@@ -749,7 +958,7 @@ class StudioController {
         id,
         title: 'Custom Campaign',
         tagline: 'Authored in GeoChain Studio',
-        description: 'Custom puzzle sequence.',
+        description: 'Custom puzzle sequence with obstacles.',
         badge: '✨',
         color: '#facc15',
         author: 'Designer',
@@ -763,10 +972,12 @@ class StudioController {
             totalParticles: 12,
             baseSpeed: 4.2,
             speedLabel: 'Swift',
+            bodySizeScale: 1.0,
             parTime: 5.0,
             charges: 1,
             distribution: { standard: 12 },
-            tip: 'First test stage.'
+            walls: [],
+            tip: 'First test stage with custom mechanics.'
           }
         ]
       };
@@ -819,6 +1030,15 @@ class StudioController {
       labelSpeedTier.textContent = `${val.toFixed(1)} (${label})`;
       this.activeLevel.baseSpeed = val;
       this.activeLevel.speedLabel = label;
+      this.renderLevelSequenceList();
+      this.respawnSimulation();
+    });
+
+    // Body Size Multiplier Slider
+    sliderBodyScale.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      this.activeLevel.bodySizeScale = val;
+      this.updateBodyScaleLabel(val);
       this.renderLevelSequenceList();
       this.respawnSimulation();
     });
@@ -909,7 +1129,6 @@ class StudioController {
       try {
         const parsed = JSON.parse(jsonSyncTextarea.value.trim());
         if (parsed.levels && Array.isArray(parsed.levels)) {
-          // Imported Campaign
           this.campaigns.push(parsed);
           this.activeCampaignIndex = this.campaigns.length - 1;
           this.activeLevelIndex = 0;
@@ -921,7 +1140,6 @@ class StudioController {
           modalJsonSync.classList.remove('show');
           this.showToast(`Imported campaign "${parsed.title}"!`);
         } else if (parsed.distribution && parsed.baseSpeed !== undefined) {
-          // Imported Level
           this.activeCampaign.levels.push(parsed);
           this.activeCampaign.levels.forEach((lvl, i) => { lvl.level = i + 1; });
           this.selectLevel(this.activeCampaign.levels.length - 1);

@@ -1,4 +1,4 @@
-import { Particle, Shrapnel, PARTICLE_TYPES, REFERENCE_ARENA } from './particles.js';
+import { Particle, Shrapnel, PARTICLE_TYPES, REFERENCE_ARENA, drawObstacleWall } from './particles.js';
 import { Explosion, SparklePool } from './explosion.js';
 import { ElasticSpacetimeGrid } from './grid.js';
 import { CAMPAIGNS } from './levels.js';
@@ -96,6 +96,8 @@ export class ChainReactionGame {
     this.roundTimeElapsed = 0;
     this.isTimerRunning = false;
     this.currentSpeedLabel = 'Normal';
+    this.bodySizeScale = 1.0;
+    this.walls = [];
 
     // Earned Sparks Milestones
     this.comboMilestones = [4, 8, 14, 22, 32, 45, 60];
@@ -350,7 +352,7 @@ export class ChainReactionGame {
     this.grid.resize(this.arena, this.scale);
     this.initAmbientMotes();
     
-    this.particles.forEach(p => p.rescale(this.arena, this.scale, oldArena));
+    this.particles.forEach(p => p.rescale(this.arena, this.scale, oldArena, this.bodySizeScale));
     this.shrapnels.forEach(s => s.rescale(this.arena, this.scale, oldArena));
     this.explosions.forEach(exp => exp.rescale(this.arena, this.scale, oldArena));
   }
@@ -377,6 +379,8 @@ export class ChainReactionGame {
 
     const speed = lvl.baseSpeed || 2.4;
     this.currentSpeedLabel = lvl.speedLabel || 'Normal';
+    this.bodySizeScale = lvl.bodySizeScale || 1.0;
+    this.walls = lvl.walls || [];
 
     this.explosions = [];
     this.shrapnels = [];
@@ -384,7 +388,7 @@ export class ChainReactionGame {
     this.particles = [];
 
     const typesToSpawn = [];
-    for (const [typeId, count] of Object.entries(lvl.distribution)) {
+    for (const [typeId, count] of Object.entries(lvl.distribution || {})) {
       for (let i = 0; i < count; i++) {
         typesToSpawn.push(typeId);
       }
@@ -395,7 +399,7 @@ export class ChainReactionGame {
       const margin = 30 * this.scale;
       const x = this.arena.x + margin + Math.random() * (this.arena.width - margin * 2);
       const y = this.arena.y + margin + Math.random() * (this.arena.height - margin * 2);
-      this.particles.push(new Particle(x, y, typeId, speed, this.arena, this.scale));
+      this.particles.push(new Particle(x, y, typeId, speed, this.arena, this.scale, this.bodySizeScale));
     });
 
     this.notifyHUD();
@@ -506,7 +510,7 @@ export class ChainReactionGame {
       const p = this.particles[i];
       if (!p.alive) continue;
 
-      p.update(dt, 1.0);
+      p.update(dt, 1.0, this.walls);
 
       for (let e = 0; e < this.explosions.length; e++) {
         const exp = this.explosions[e];
@@ -572,7 +576,7 @@ export class ChainReactionGame {
     // Update Shrapnels
     for (let s = this.shrapnels.length - 1; s >= 0; s--) {
       const shrapnel = this.shrapnels[s];
-      shrapnel.update(dt);
+      shrapnel.update(dt, this.walls);
 
       if (!shrapnel.alive) {
         this.shrapnels.splice(s, 1);
@@ -800,6 +804,18 @@ export class ChainReactionGame {
     ctx.beginPath();
     ctx.moveTo(x + w - bracketLen, y + h); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w, y + h - bracketLen);
     ctx.stroke();
+
+    // Obstacle Barrier Walls
+    if (this.walls && this.walls.length > 0) {
+      for (let i = 0; i < this.walls.length; i++) {
+        const wall = this.walls[i];
+        const wx1 = x + wall.x1 * w;
+        const wy1 = y + wall.y1 * h;
+        const wx2 = x + wall.x2 * w;
+        const wy2 = y + wall.y2 * h;
+        drawObstacleWall(ctx, wx1, wy1, wx2, wy2, this.scale);
+      }
+    }
 
     ctx.restore();
 

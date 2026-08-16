@@ -233,6 +233,15 @@ html, body {
   color: var(--accent-cyan);
 }
 
+.studio-btn-sm.text-danger {
+  color: var(--accent-danger);
+}
+
+.studio-btn-sm.text-danger:hover {
+  border-color: var(--accent-danger);
+  background: rgba(244, 63, 94, 0.15);
+}
+
 .icon-action-btn {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-subtle);
@@ -464,10 +473,13 @@ html, body {
   gap: 8px;
 }
 
-.group-header-row {
+.group-header-row, .control-label-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-secondary);
 }
 
 .group-title {
@@ -635,12 +647,48 @@ html, body {
   border-radius: var(--radius-pill);
   padding: 6px 14px;
   z-index: 10;
+  gap: 8px;
 }
 
 .sim-left-controls {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Tool Mode Pills (Spark vs Draw Wall vs Erase Wall) */
+.tool-mode-pills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 3px 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-subtle);
+}
+
+.tool-pill-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tool-pill-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tool-pill-btn.active {
+  background: var(--accent-cyan);
+  color: #030712;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
 }
 
 .sim-speed-controls {

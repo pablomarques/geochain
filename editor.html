@@ -222,8 +222,9 @@
 
           <!-- Physics, Velocity & Spark Charges -->
           <div class="inspector-group">
-            <span class="group-title">Velocity & Difficulty Calibration</span>
+            <span class="group-title">Velocity, Size & Mechanics Calibration</span>
 
+            <!-- Velocity -->
             <div class="velocity-control-group">
               <div class="control-label-row">
                 <span>Base Velocity</span>
@@ -232,6 +233,16 @@
               <input id="slider-base-speed" class="studio-slider" type="range" min="1.0" max="5.0" step="0.1" value="4.6">
             </div>
 
+            <!-- Body Size Multiplier -->
+            <div class="body-scale-control-group" style="margin-top: 10px;">
+              <div class="control-label-row">
+                <span>Body Size Multiplier</span>
+                <span id="label-body-scale" class="badge-pill highlight-cyan">1.0x (Standard)</span>
+              </div>
+              <input id="slider-body-scale" class="studio-slider" type="range" min="0.5" max="2.5" step="0.05" value="1.0">
+            </div>
+
+            <!-- Spark Charges -->
             <div class="charges-control-group" style="margin-top: 10px;">
               <span class="control-sublabel">Starting Spark Triggers</span>
               <div class="charges-pill-selector">
@@ -275,16 +286,26 @@
 
       <!-- Center-Right Viewport & Playtest Sandbox -->
       <section class="studio-viewport-container">
-        <!-- Simulation Control Bar -->
+        <!-- Simulation & Wall Tool Control Bar -->
         <div class="sim-control-bar">
           <div class="sim-left-controls">
             <button id="btn-sim-reset" class="hud-btn primary" title="Reset Field [R]">↺ Respawn (R)</button>
             <button id="btn-lock-seed" class="hud-btn" title="Toggle Fixed Random Seed">🔓 Random Seed</button>
           </div>
 
+          <!-- Tool Selector: Spark vs Draw Wall vs Erase Wall -->
+          <div class="tool-mode-pills">
+            <span class="switcher-label">Mode:</span>
+            <button id="btn-tool-spark" class="tool-pill-btn active" data-tool="spark" title="Playtest Trigger Spark [Space]">⚡ Spark</button>
+            <button id="btn-tool-wall" class="tool-pill-btn" data-tool="wall" title="Click & drag inside arena to draw barrier wall [W]">✏️ Draw Wall</button>
+            <button id="btn-tool-erase" class="tool-pill-btn" data-tool="erase" title="Click any wall to erase it">✂️ Erase</button>
+            <button id="btn-snap-grid" class="tool-pill-btn" title="Toggle 5% Grid Snapping">🧲 Snap 5%</button>
+            <button id="btn-clear-walls" class="studio-btn-sm text-danger" title="Clear All Obstacle Walls">🧹 Clear (<span id="wall-count-badge">0</span>)</button>
+          </div>
+
           <!-- Playback Speed -->
           <div class="sim-speed-controls">
-            <span class="sim-speed-label">Playback:</span>
+            <span class="sim-speed-label">Speed:</span>
             <button class="sim-speed-btn active" data-speed="1.0">1.0x</button>
             <button class="sim-speed-btn" data-speed="0.5">0.5x</button>
             <button class="sim-speed-btn" data-speed="0.25">0.25x</button>

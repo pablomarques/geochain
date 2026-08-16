@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GeoChain — Campaign & Level Designer Studio</title>
+  <meta name="description" content="Official in-browser authoring suite for GeoChain: craft, calibrate, playtest, and export multi-format geometric cascade levels.">
+  
+  <!-- Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="./src/editor/editor.css">
+</head>
+<body>
+  <div id="studio-root">
+    <!-- Top Studio Header -->
+    <header class="studio-header">
+      <div class="header-left">
+        <div class="studio-brand">
+          <div class="studio-logo-icon"></div>
+          <div class="studio-titles">
+            <span class="studio-main-title">GeoChain Studio</span>
+            <span class="studio-sub-title">Level & Campaign Authoring Suite</span>
+          </div>
+        </div>
+
+        <div class="header-divider"></div>
+
+        <!-- Multi-Format Viewport Switcher -->
+        <div class="viewport-switcher-group" aria-label="Viewport Format Switcher">
+          <span class="switcher-label">Viewport:</span>
+          <button id="btn-format-desktop" class="format-pill-btn active" data-format="desktop-16-10" title="Desktop 16:10 (960x600)">
+            🖥️ Desktop (16:10)
+          </button>
+          <button id="btn-format-desktop-wide" class="format-pill-btn" data-format="desktop-16-9" title="Desktop 16:9 (960x540)">
+            🖥️ Desktop (16:9)
+          </button>
+          <button id="btn-format-mobile" class="format-pill-btn" data-format="mobile-portrait" title="Mobile Portrait (540x960)">
+            📱 Mobile (9:16)
+          </button>
+        </div>
+      </div>
+
+      <!-- Header Action Controls -->
+      <div class="header-right">
+        <button id="btn-copy-level-json" class="studio-btn" title="Copy Active Level JSON">📋 Copy Level</button>
+        <button id="btn-export-campaign-json" class="studio-btn" title="Export Full Campaign Pack JSON">📦 Export Pack</button>
+        <button id="btn-import-json" class="studio-btn" title="Import JSON Level or Campaign">📥 Import</button>
+        <button id="btn-save-draft" class="studio-btn primary" title="Save Draft to Local Storage">💾 Save Draft</button>
+        <a href="./index.html" class="studio-btn player-link-btn" title="Return to Player Game">🎮 Play Game</a>
+      </div>
+    </header>
+
+    <!-- Studio Main Workspace -->
+    <main class="studio-workspace">
+      <!-- Left Panel: Campaign & Level Sequencing -->
+      <aside class="studio-panel campaign-panel">
+        <div class="panel-section-header">
+          <h2 class="panel-section-title">Campaign Sequence</h2>
+          <button id="btn-new-campaign" class="icon-action-btn" title="Create New Campaign">➕</button>
+        </div>
+
+        <!-- Campaign Selector -->
+        <div class="campaign-select-row">
+          <select id="select-active-campaign" class="studio-select" aria-label="Active Campaign"></select>
+        </div>
+
+        <!-- Campaign Meta Editor (Collapsible) -->
+        <details class="campaign-meta-details">
+          <summary class="details-summary">Campaign Metadata</summary>
+          <div class="meta-form-grid">
+            <div class="input-group">
+              <label for="input-campaign-title">Title</label>
+              <input id="input-campaign-title" class="studio-input" type="text" value="Genesis Odyssey">
+            </div>
+            <div class="input-group">
+              <label for="input-campaign-tagline">Tagline</label>
+              <input id="input-campaign-tagline" class="studio-input" type="text" value="The Core Geometric Cascade">
+            </div>
+            <div class="input-row-split">
+              <div class="input-group">
+                <label for="input-campaign-badge">Badge</label>
+                <input id="input-campaign-badge" class="studio-input" type="text" value="🌌" style="text-align: center;">
+              </div>
+              <div class="input-group">
+                <label for="input-campaign-color">Color</label>
+                <input id="input-campaign-color" class="studio-input" type="color" value="#38bdf8">
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <div class="panel-divider"></div>
+
+        <!-- Level List Header -->
+        <div class="level-list-header">
+          <span class="level-list-title">Stages (<span id="level-list-count">12</span>)</span>
+          <button id="btn-add-level" class="studio-btn-sm" title="Add New Stage">+ Add Stage</button>
+        </div>
+
+        <!-- Scrollable Level Cards List -->
+        <div id="levels-sequence-list" class="levels-sequence-list">
+          <!-- Dynamically populated level items -->
+        </div>
+      </aside>
+
+      <!-- Center Inspector Panel: Level Properties & Platonic Entity Palette -->
+      <aside class="studio-panel inspector-panel">
+        <div class="panel-section-header">
+          <h2 class="panel-section-title">Level Configuration</h2>
+          <div class="level-actions-toolbar">
+            <button id="btn-duplicate-level" class="icon-action-btn" title="Duplicate Level">❐</button>
+            <button id="btn-delete-level" class="icon-action-btn danger" title="Delete Level">🗑️</button>
+          </div>
+        </div>
+
+        <!-- Level Identity -->
+        <div class="inspector-scroll-area">
+          <div class="inspector-group">
+            <div class="input-row-split">
+              <div class="input-group" style="flex: 0 0 70px;">
+                <label for="input-level-num">Stage #</label>
+                <input id="input-level-num" class="studio-input" type="number" min="1" max="99" value="1">
+              </div>
+              <div class="input-group" style="flex: 1;">
+                <label for="input-level-title">Title</label>
+                <input id="input-level-title" class="studio-input" type="text" value="First Sparks">
+              </div>
+            </div>
+            <div class="input-group" style="margin-top: 8px;">
+              <label for="input-level-tip">Contextual Hint / Designer Tip</label>
+              <textarea id="input-level-tip" class="studio-textarea" rows="2" placeholder="High velocity! Bodies cross the arena quickly..."></textarea>
+            </div>
+          </div>
+
+          <div class="panel-divider"></div>
+
+          <!-- Platonic Entity Distribution Palette -->
+          <div class="inspector-group">
+            <div class="group-header-row">
+              <span class="group-title">Platonic Entity Distribution</span>
+              <span id="total-particles-badge" class="badge-pill highlight-cyan">8 Bodies</span>
+            </div>
+
+            <div class="entity-sliders-list">
+              <!-- Triangles -->
+              <div class="entity-slider-row" data-type="standard">
+                <div class="entity-row-meta">
+                  <span class="entity-icon" style="color: #38bdf8;">🔺</span>
+                  <span class="entity-name">Triangle (Spark)</span>
+                  <span class="entity-val" id="val-ent-standard">8</span>
+                </div>
+                <input id="slider-ent-standard" class="studio-slider" type="range" min="0" max="60" value="8">
+              </div>
+
+              <!-- Diamonds -->
+              <div class="entity-slider-row" data-type="mega">
+                <div class="entity-row-meta">
+                  <span class="entity-icon" style="color: #fb923c;">🔶</span>
+                  <span class="entity-name">Diamond (Mega Blast)</span>
+                  <span class="entity-val" id="val-ent-mega">0</span>
+                </div>
+                <input id="slider-ent-mega" class="studio-slider" type="range" min="0" max="40" value="0">
+              </div>
+
+              <!-- Nova Stars -->
+              <div class="entity-slider-row" data-type="splitter">
+                <div class="entity-row-meta">
+                  <span class="entity-icon" style="color: #e879f9;">🌟</span>
+                  <span class="entity-name">Nova Star (Sniper Shards)</span>
+                  <span class="entity-val" id="val-ent-splitter">0</span>
+                </div>
+                <input id="slider-ent-splitter" class="studio-slider" type="range" min="0" max="30" value="0">
+              </div>
+
+              <!-- Hex Vortex -->
+              <div class="entity-slider-row" data-type="vortex">
+                <div class="entity-row-meta">
+                  <span class="entity-icon" style="color: #34d399;">🟢</span>
+                  <span class="entity-name">Hexagon (Singularity)</span>
+                  <span class="entity-val" id="val-ent-vortex">0</span>
+                </div>
+                <input id="slider-ent-vortex" class="studio-slider" type="range" min="0" max="30" value="0">
+              </div>
+
+              <!-- Pentagons -->
+              <div class="entity-slider-row" data-type="longburner">
+                <div class="entity-row-meta">
+                  <span class="entity-icon" style="color: #facc15;">⬠</span>
+                  <span class="entity-name">Pentagon (Ember Linger)</span>
+                  <span class="entity-val" id="val-ent-longburner">0</span>
+                </div>
+                <input id="slider-ent-longburner" class="studio-slider" type="range" min="0" max="30" value="0">
+              </div>
+
+              <!-- Chevrons -->
+              <div class="entity-slider-row" data-type="speedster">
+                <div class="entity-row-meta">
+                  <span class="entity-icon" style="color: #60a5fa;">⚡</span>
+                  <span class="entity-name">Chevron (Hyper Speed)</span>
+                  <span class="entity-val" id="val-ent-speedster">0</span>
+                </div>
+                <input id="slider-ent-speedster" class="studio-slider" type="range" min="0" max="30" value="0">
+              </div>
+
+              <!-- Catalysts -->
+              <div class="entity-slider-row" data-type="catalyst">
+                <div class="entity-row-meta">
+                  <span class="entity-icon" style="color: #ffffff;">⚪</span>
+                  <span class="entity-name">Octagon (+1 Spark)</span>
+                  <span class="entity-val" id="val-ent-catalyst">0</span>
+                </div>
+                <input id="slider-ent-catalyst" class="studio-slider" type="range" min="0" max="10" value="0">
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-divider"></div>
+
+          <!-- Physics, Velocity & Spark Charges -->
+          <div class="inspector-group">
+            <span class="group-title">Velocity & Difficulty Calibration</span>
+
+            <div class="velocity-control-group">
+              <div class="control-label-row">
+                <span>Base Velocity</span>
+                <span id="label-speed-tier" class="badge-pill highlight-cyan">4.6 (High Velocity)</span>
+              </div>
+              <input id="slider-base-speed" class="studio-slider" type="range" min="1.0" max="5.0" step="0.1" value="4.6">
+            </div>
+
+            <div class="charges-control-group" style="margin-top: 10px;">
+              <span class="control-sublabel">Starting Spark Triggers</span>
+              <div class="charges-pill-selector">
+                <button class="charge-btn active" data-charges="1">1 Spark</button>
+                <button class="charge-btn" data-charges="2">2 Sparks</button>
+                <button class="charge-btn" data-charges="3">3 Sparks</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-divider"></div>
+
+          <!-- Star Quota & Par Time Calibration -->
+          <div class="inspector-group">
+            <div class="group-header-row">
+              <span class="group-title">Star Quotas & Par Time</span>
+              <button id="btn-autocalc-quotas" class="studio-btn-sm text-cyan" title="Auto-Calculate Balanced Star Targets">✨ Auto-Balance</button>
+            </div>
+
+            <div class="quota-inputs-grid">
+              <div class="input-group">
+                <label for="input-quota-target">1★ (Pass)</label>
+                <input id="input-quota-target" class="studio-input" type="number" min="1" max="100" value="1">
+              </div>
+              <div class="input-group">
+                <label for="input-quota-star2">2★ Target</label>
+                <input id="input-quota-star2" class="studio-input" type="number" min="1" max="100" value="3">
+              </div>
+              <div class="input-group">
+                <label for="input-quota-star3">3★ Mastery</label>
+                <input id="input-quota-star3" class="studio-input" type="number" min="1" max="100" value="5">
+              </div>
+              <div class="input-group">
+                <label for="input-par-time">Par Time (s)</label>
+                <input id="input-par-time" class="studio-input" type="number" min="2.0" max="30.0" step="0.5" value="4.5">
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center-Right Viewport & Playtest Sandbox -->
+      <section class="studio-viewport-container">
+        <!-- Simulation Control Bar -->
+        <div class="sim-control-bar">
+          <div class="sim-left-controls">
+            <button id="btn-sim-reset" class="hud-btn primary" title="Reset Field [R]">↺ Respawn (R)</button>
+            <button id="btn-lock-seed" class="hud-btn" title="Toggle Fixed Random Seed">🔓 Random Seed</button>
+          </div>
+
+          <!-- Playback Speed -->
+          <div class="sim-speed-controls">
+            <span class="sim-speed-label">Playback:</span>
+            <button class="sim-speed-btn active" data-speed="1.0">1.0x</button>
+            <button class="sim-speed-btn" data-speed="0.5">0.5x</button>
+            <button class="sim-speed-btn" data-speed="0.25">0.25x</button>
+          </div>
+
+          <div class="sim-viewport-meta">
+            <span id="viewport-resolution-label" class="resolution-badge">960 × 600 (16:10)</span>
+          </div>
+        </div>
+
+        <!-- Canvas Device Mockup Frame -->
+        <div id="viewport-frame-wrapper" class="viewport-frame-wrapper desktop-16-10">
+          <canvas id="studio-canvas"></canvas>
+          <div id="studio-click-prompt" class="studio-canvas-overlay">
+            Click inside arena to ignite reaction
+          </div>
+        </div>
+
+        <!-- Live Cascade Telemetry Tray -->
+        <div class="telemetry-tray">
+          <div class="telemetry-stat-card">
+            <span class="telemetry-label">Bodies Popped</span>
+            <span id="tel-popped" class="telemetry-val highlight-cyan">0 / 8 (0%)</span>
+          </div>
+
+          <div class="telemetry-stat-card">
+            <span class="telemetry-label">Longest Chain</span>
+            <span id="tel-combo" class="telemetry-val highlight-emerald">x0</span>
+          </div>
+
+          <div class="telemetry-stat-card">
+            <span class="telemetry-label">Elapsed / Par</span>
+            <span id="tel-time" class="telemetry-val">0.0s / 4.5s</span>
+          </div>
+
+          <div class="telemetry-stat-card">
+            <span class="telemetry-label">Sparks Left</span>
+            <span id="tel-sparks" class="telemetry-val highlight-amber">1</span>
+          </div>
+
+          <div class="telemetry-stat-card">
+            <span class="telemetry-label">Projected Outcome</span>
+            <span id="tel-stars" class="telemetry-val">☆☆☆</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Modal: JSON Import / Export -->
+    <div id="modal-json-sync" class="modal-backdrop">
+      <div class="modal-card" style="width: 640px;">
+        <div class="modal-header-centered">
+          <h2 id="json-modal-title" class="modal-title">JSON Data Sync</h2>
+          <p id="json-modal-desc" class="modal-desc">Copy data to clipboard or paste JSON to import.</p>
+        </div>
+
+        <textarea id="json-sync-textarea" class="studio-json-textarea" rows="12" spellcheck="false"></textarea>
+
+        <div class="modal-actions" style="margin-top: 14px;">
+          <button id="btn-copy-textarea" class="hud-btn">Copy to Clipboard</button>
+          <button id="btn-apply-json-import" class="hud-btn primary" style="display: none;">Apply Import</button>
+          <button id="btn-close-json-modal" class="hud-btn">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Studio Entry Script -->
+  <script type="module" src="./src/editor/editor.js"></script>
+</body>
+</html>

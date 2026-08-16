@@ -184,6 +184,7 @@ html, body {
   cursor: pointer;
   box-shadow: var(--shadow-glow);
   transition: all 0.2s ease;
+  text-decoration: none;
 }
 
 .icon-btn:hover {

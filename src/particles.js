@@ -182,7 +182,7 @@ export function drawObstacleWall(ctx, x1, y1, x2, y2, scale = 1.0) {
 }
 
 export class Particle {
-  constructor(x, y, typeId = 'standard', baseSpeed = 2.4, arena = { x: 0, y: 0, width: 960, height: 600 }, scale = 1.0, bodyScale = 1.0, speedScale = 1.0, blastScale = 1.0) {
+  constructor(x, y, typeId = 'standard', baseSpeed = 2.4, arena = { x: 0, y: 0, width: 960, height: 600 }, scale = 1.0, bodyScale = 1.0, speedScale = 1.0, blastScale = 1.0, durationScale = 1.0) {
     this.x = x;
     this.y = y;
     this.type = PARTICLE_TYPES[typeId] || PARTICLE_TYPES.standard;
@@ -191,6 +191,7 @@ export class Particle {
     this.bodyScale = bodyScale || 1.0;
     this.speedScale = speedScale || 1.0;
     this.blastScale = blastScale || 1.0;
+    this.durationScale = durationScale || 1.0;
 
     // Physical radius scaled proportionally to arena and body size multiplier
     this.radius = this.type.radius * this.bodyScale * scale;
@@ -217,7 +218,7 @@ export class Particle {
   }
 
   // Smoothly reposition and rescale physics on window resize
-  rescale(newArena, newScale, oldArena, bodyScale = null, speedScale = null, blastScale = null) {
+  rescale(newArena, newScale, oldArena, bodyScale = null, speedScale = null, blastScale = null, durationScale = null) {
     if (bodyScale !== null) {
       this.bodyScale = bodyScale;
     }
@@ -226,6 +227,9 @@ export class Particle {
     }
     if (blastScale !== null) {
       this.blastScale = blastScale;
+    }
+    if (durationScale !== null) {
+      this.durationScale = durationScale;
     }
 
     if (oldArena && oldArena.width > 0 && oldArena.height > 0) {

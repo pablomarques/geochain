@@ -46,33 +46,43 @@ const entitySliders = {};
 const entitySizeSliders = {};
 const entitySpeedSliders = {};
 const entityBlastSliders = {};
+const entityDurationSliders = {};
 
 const entityValueLabels = {};
 const entitySizeLabels = {};
 const entitySpeedLabels = {};
 const entityBlastLabels = {};
+const entityDurationLabels = {};
 
 entityTypes.forEach(type => {
   entitySliders[type] = document.getElementById(`slider-ent-${type}`);
   entitySizeSliders[type] = document.getElementById(`slider-size-${type}`);
   entitySpeedSliders[type] = document.getElementById(`slider-speed-${type}`);
   entityBlastSliders[type] = document.getElementById(`slider-blast-${type}`);
+  entityDurationSliders[type] = document.getElementById(`slider-duration-${type}`);
 
   entityValueLabels[type] = document.getElementById(`val-ent-${type}`);
   entitySizeLabels[type] = document.getElementById(`val-size-${type}`);
   entitySpeedLabels[type] = document.getElementById(`val-speed-${type}`);
   entityBlastLabels[type] = document.getElementById(`val-blast-${type}`);
+  entityDurationLabels[type] = document.getElementById(`val-duration-${type}`);
 });
 
-// Physics, Size, Explosion Radii & Star Targets
+// Physics, Size, Explosion Radii, Durations & Star Targets
 const sliderBaseSpeed = document.getElementById('slider-base-speed');
 const labelSpeedTier = document.getElementById('label-speed-tier');
 const sliderBodyScale = document.getElementById('slider-body-scale');
 const labelBodyScale = document.getElementById('label-body-scale');
+
 const sliderSparkBlast = document.getElementById('slider-spark-blast');
 const labelSparkBlast = document.getElementById('label-spark-blast');
+const sliderSparkDuration = document.getElementById('slider-spark-duration');
+const labelSparkDuration = document.getElementById('label-spark-duration');
+
 const sliderChainBlast = document.getElementById('slider-chain-blast');
 const labelChainBlast = document.getElementById('label-chain-blast');
+const sliderChainDuration = document.getElementById('slider-chain-duration');
+const labelChainDuration = document.getElementById('label-chain-duration');
 
 const chargeBtns = document.querySelectorAll('.charge-btn');
 const inputQuotaTarget = document.getElementById('input-quota-target');
@@ -193,6 +203,8 @@ class StudioController {
           bodySizeScale: lvl.bodySizeScale || 1.0,
           sparkBlastScale: lvl.sparkBlastScale || 1.0,
           chainBlastScale: lvl.chainBlastScale || 1.0,
+          sparkDurationScale: lvl.sparkDurationScale || 1.0,
+          chainDurationScale: lvl.chainDurationScale || 1.0,
           parTime: lvl.parTime || 5.0,
           charges: lvl.charges || 1,
           distribution: lvl.distribution || { standard: 8 },
@@ -208,6 +220,8 @@ class StudioController {
           bodySizeScale: +(Math.min(2.5, (lvl.bodySizeScale || 1.0) * 1.15)).toFixed(2),
           sparkBlastScale: lvl.sparkBlastScale || 1.0,
           chainBlastScale: lvl.chainBlastScale || 1.0,
+          sparkDurationScale: lvl.sparkDurationScale || 1.0,
+          chainDurationScale: lvl.chainDurationScale || 1.0,
           parTime: lvl.parTime || 5.0,
           charges: lvl.charges || 1,
           distribution: { standard: Math.max(4, Math.round((lvl.totalParticles || 8) * 0.7)) },
@@ -227,6 +241,8 @@ class StudioController {
     if (!spec.bodies) spec.bodies = {};
     if (spec.sparkBlastScale === undefined) spec.sparkBlastScale = 1.0;
     if (spec.chainBlastScale === undefined) spec.chainBlastScale = 1.0;
+    if (spec.sparkDurationScale === undefined) spec.sparkDurationScale = 1.0;
+    if (spec.chainDurationScale === undefined) spec.chainDurationScale = 1.0;
 
     const defaultSize = spec.bodySizeScale || (this.editingFormat === 'mobile' ? 1.15 : 1.0);
     
@@ -237,10 +253,12 @@ class StudioController {
           count,
           size: defaultSize,
           speed: 1.0,
-          blast: 1.0
+          blast: 1.0,
+          duration: 1.0
         };
-      } else if (spec.bodies[type].blast === undefined) {
-        spec.bodies[type].blast = 1.0;
+      } else {
+        if (spec.bodies[type].blast === undefined) spec.bodies[type].blast = 1.0;
+        if (spec.bodies[type].duration === undefined) spec.bodies[type].duration = 1.0;
       }
     });
 
@@ -367,10 +385,12 @@ class StudioController {
           bodySizeScale: 1.0,
           sparkBlastScale: 1.0,
           chainBlastScale: 1.0,
+          sparkDurationScale: 1.0,
+          chainDurationScale: 1.0,
           parTime: +(4.5 + newStageNum * 0.5).toFixed(1),
           charges: newStageNum > 9 ? 2 : 1,
           distribution: { standard: Math.min(80, 10 + newStageNum * 5) },
-          bodies: { standard: { count: Math.min(80, 10 + newStageNum * 5), size: 1.0, speed: 1.0, blast: 1.0 } },
+          bodies: { standard: { count: Math.min(80, 10 + newStageNum * 5), size: 1.0, speed: 1.0, blast: 1.0, duration: 1.0 } },
           walls: []
         },
         mobile: {
@@ -382,10 +402,12 @@ class StudioController {
           bodySizeScale: 1.15,
           sparkBlastScale: 1.0,
           chainBlastScale: 1.0,
+          sparkDurationScale: 1.0,
+          chainDurationScale: 1.0,
           parTime: +(4.5 + newStageNum * 0.5).toFixed(1),
           charges: newStageNum > 9 ? 2 : 1,
           distribution: { standard: Math.min(55, 8 + newStageNum * 4) },
-          bodies: { standard: { count: Math.min(55, 8 + newStageNum * 4), size: 1.15, speed: 1.0, blast: 1.0 } },
+          bodies: { standard: { count: Math.min(55, 8 + newStageNum * 4), size: 1.15, speed: 1.0, blast: 1.0, duration: 1.0 } },
           walls: []
         }
       }
@@ -434,23 +456,26 @@ class StudioController {
     btnTargetDesktop.classList.toggle('active', this.editingFormat === 'desktop');
     btnTargetMobile.classList.toggle('active', this.editingFormat === 'mobile');
 
-    // Per-Body Controls (Qty, Size, Speed, Blast)
+    // Per-Body Controls (Qty, Size, Speed, Blast, Duration)
     entityTypes.forEach(type => {
-      const bodySpec = spec.bodies[type] || { count: 0, size: 1.0, speed: 1.0, blast: 1.0 };
+      const bodySpec = spec.bodies[type] || { count: 0, size: 1.0, speed: 1.0, blast: 1.0, duration: 1.0 };
       const count = bodySpec.count || 0;
       const size = bodySpec.size !== undefined ? bodySpec.size : 1.0;
       const speed = bodySpec.speed !== undefined ? bodySpec.speed : 1.0;
       const blast = bodySpec.blast !== undefined ? bodySpec.blast : 1.0;
+      const duration = bodySpec.duration !== undefined ? bodySpec.duration : 1.0;
 
       if (entitySliders[type]) entitySliders[type].value = count;
       if (entitySizeSliders[type]) entitySizeSliders[type].value = size;
       if (entitySpeedSliders[type]) entitySpeedSliders[type].value = speed;
       if (entityBlastSliders[type]) entityBlastSliders[type].value = blast;
+      if (entityDurationSliders[type]) entityDurationSliders[type].value = duration;
 
       if (entityValueLabels[type]) entityValueLabels[type].textContent = count;
       if (entitySizeLabels[type]) entitySizeLabels[type].textContent = `${size.toFixed(2)}x`;
       if (entitySpeedLabels[type]) entitySpeedLabels[type].textContent = `${speed.toFixed(2)}x`;
       if (entityBlastLabels[type]) entityBlastLabels[type].textContent = `${blast.toFixed(2)}x`;
+      if (entityDurationLabels[type]) entityDurationLabels[type].textContent = `${duration.toFixed(2)}x`;
     });
 
     this.updateTotalParticlesBadge();
@@ -465,15 +490,23 @@ class StudioController {
     sliderBodyScale.value = bodyScale;
     this.updateBodyScaleLabel(bodyScale);
 
-    // Global User Spark Explosion Radius
+    // Global User Spark Explosion Radius & Duration
     const sparkBlast = spec.sparkBlastScale !== undefined ? spec.sparkBlastScale : 1.0;
     sliderSparkBlast.value = sparkBlast;
     labelSparkBlast.textContent = `${sparkBlast.toFixed(2)}x (${this.getBlastLabel(sparkBlast)})`;
 
-    // Global Chain Explosion Base Radius
+    const sparkDuration = spec.sparkDurationScale !== undefined ? spec.sparkDurationScale : 1.0;
+    sliderSparkDuration.value = sparkDuration;
+    labelSparkDuration.textContent = `${sparkDuration.toFixed(2)}x (${(2.8 * sparkDuration).toFixed(1)}s)`;
+
+    // Global Chain Explosion Base Radius & Duration
     const chainBlast = spec.chainBlastScale !== undefined ? spec.chainBlastScale : 1.0;
     sliderChainBlast.value = chainBlast;
     labelChainBlast.textContent = `${chainBlast.toFixed(2)}x (${this.getBlastLabel(chainBlast)})`;
+
+    const chainDuration = spec.chainDurationScale !== undefined ? spec.chainDurationScale : 1.0;
+    sliderChainDuration.value = chainDuration;
+    labelChainDuration.textContent = `${chainDuration.toFixed(2)}x (${(2.8 * chainDuration).toFixed(1)}s)`;
 
     // Wall Count Badge
     wallCountBadge.textContent = (spec.walls && spec.walls.length) || 0;
@@ -659,8 +692,9 @@ class StudioController {
       const size = typeof bodySpec === 'object' && bodySpec.size !== undefined ? bodySpec.size : defaultBodyScale;
       const speedScale = typeof bodySpec === 'object' && bodySpec.speed !== undefined ? bodySpec.speed : 1.0;
       const blastScale = typeof bodySpec === 'object' && bodySpec.blast !== undefined ? bodySpec.blast : 1.0;
+      const durationScale = typeof bodySpec === 'object' && bodySpec.duration !== undefined ? bodySpec.duration : 1.0;
       for (let i = 0; i < count; i++) {
-        typesToSpawn.push({ typeId, size, speedScale, blastScale });
+        typesToSpawn.push({ typeId, size, speedScale, blastScale, durationScale });
       }
     }
 
@@ -669,7 +703,7 @@ class StudioController {
       const margin = 28 * this.scale;
       const x = this.arena.x + margin + rng() * (this.arena.width - margin * 2);
       const y = this.arena.y + margin + rng() * (this.arena.height - margin * 2);
-      this.particles.push(new Particle(x, y, item.typeId, baseSpeed, this.arena, this.scale, item.size, item.speedScale, item.blastScale));
+      this.particles.push(new Particle(x, y, item.typeId, baseSpeed, this.arena, this.scale, item.size, item.speedScale, item.blastScale, item.durationScale));
     });
 
     if (this.activeTool === 'spark') {
@@ -699,9 +733,10 @@ class StudioController {
     soundEngine.playSeedTrigger();
 
     const sparkBlast = this.activeFormatSpec.sparkBlastScale || 1.0;
-    const config = { baseRadius: 65 * sparkBlast, baseDuration: 2.8 };
+    const sparkDuration = this.activeFormatSpec.sparkDurationScale || 1.0;
+    const config = { baseRadius: 65 * sparkBlast, baseDuration: 2.8 * sparkDuration };
 
-    this.explosions.push(new Explosion(x, y, null, config, Math.random() * Math.PI, true, this.scale, 1.0));
+    this.explosions.push(new Explosion(x, y, null, config, Math.random() * Math.PI, true, this.scale, 1.0, 1.0));
     this.sparklePool.spawnBurst(x, y, '#38bdf8', 16, 1.1, this.scale);
     this.grid.applyExplosionImpulse(x, y, 75 * this.scale * sparkBlast, 70, false);
 
@@ -748,7 +783,8 @@ class StudioController {
 
     this.grid.update(dt);
     const chainBlast = this.activeFormatSpec.chainBlastScale || 1.0;
-    const config = { baseRadius: 65 * chainBlast, baseDuration: 2.8 };
+    const chainDuration = this.activeFormatSpec.chainDurationScale || 1.0;
+    const config = { baseRadius: 65 * chainBlast, baseDuration: 2.8 * chainDuration };
 
     // Particles & Collisions
     for (let i = this.particles.length - 1; i >= 0; i--) {
@@ -766,7 +802,7 @@ class StudioController {
           if (this.comboChain > this.highestCombo) this.highestCombo = this.comboChain;
 
           soundEngine.playExplosionChime(this.comboChain, p.type.id);
-          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false, this.scale, p.blastScale || 1.0));
+          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false, this.scale, p.blastScale || 1.0, p.durationScale || 1.0));
           this.grid.applyExplosionImpulse(p.x, p.y, 60 * this.scale * (p.blastScale || 1.0), 50, false);
 
           const sparkleCount = Math.min(28, 16 + this.comboChain);
@@ -806,7 +842,7 @@ class StudioController {
           if (this.comboChain > this.highestCombo) this.highestCombo = this.comboChain;
 
           soundEngine.playExplosionChime(this.comboChain, p.type.id);
-          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false, this.scale, p.blastScale || 1.0));
+          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false, this.scale, p.blastScale || 1.0, p.durationScale || 1.0));
           this.grid.applyExplosionImpulse(p.x, p.y, 50 * this.scale * (p.blastScale || 1.0), 40, false);
           this.sparklePool.spawnBurst(p.x, p.y, '#e879f9', 16, 1.1, this.scale);
           this.updateTelemetryHUD();
@@ -1161,10 +1197,12 @@ class StudioController {
                 bodySizeScale: 1.0,
                 sparkBlastScale: 1.0,
                 chainBlastScale: 1.0,
+                sparkDurationScale: 1.0,
+                chainDurationScale: 1.0,
                 parTime: 5.0,
                 charges: 1,
                 distribution: { standard: 12 },
-                bodies: { standard: { count: 12, size: 1.0, speed: 1.0, blast: 1.0 } },
+                bodies: { standard: { count: 12, size: 1.0, speed: 1.0, blast: 1.0, duration: 1.0 } },
                 walls: []
               },
               mobile: {
@@ -1176,10 +1214,12 @@ class StudioController {
                 bodySizeScale: 1.15,
                 sparkBlastScale: 1.0,
                 chainBlastScale: 1.0,
+                sparkDurationScale: 1.0,
+                chainDurationScale: 1.0,
                 parTime: 5.0,
                 charges: 1,
                 distribution: { standard: 9 },
-                bodies: { standard: { count: 9, size: 1.15, speed: 1.0, blast: 1.0 } },
+                bodies: { standard: { count: 9, size: 1.15, speed: 1.0, blast: 1.0, duration: 1.0 } },
                 walls: []
               }
             }
@@ -1215,14 +1255,14 @@ class StudioController {
       this.activeLevel.tip = e.target.value;
     });
 
-    // Per-Body Control Event Listeners (Qty, Size, Speed, Blast)
+    // Per-Body Control Event Listeners (Qty, Size, Speed, Blast, Duration)
     entityTypes.forEach(type => {
       // 1. Quantity Slider
       if (entitySliders[type]) {
         entitySliders[type].addEventListener('input', (e) => {
           const val = parseInt(e.target.value, 10);
           entityValueLabels[type].textContent = val;
-          if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0, blast: 1.0 };
+          if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0, blast: 1.0, duration: 1.0 };
           this.activeFormatSpec.bodies[type].count = val;
           if (!this.activeFormatSpec.distribution) this.activeFormatSpec.distribution = {};
           this.activeFormatSpec.distribution[type] = val;
@@ -1237,7 +1277,7 @@ class StudioController {
         entitySizeSliders[type].addEventListener('input', (e) => {
           const val = parseFloat(e.target.value);
           entitySizeLabels[type].textContent = `${val.toFixed(2)}x`;
-          if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0, blast: 1.0 };
+          if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0, blast: 1.0, duration: 1.0 };
           this.activeFormatSpec.bodies[type].size = val;
           this.respawnSimulation();
         });
@@ -1248,7 +1288,7 @@ class StudioController {
         entitySpeedSliders[type].addEventListener('input', (e) => {
           const val = parseFloat(e.target.value);
           entitySpeedLabels[type].textContent = `${val.toFixed(2)}x`;
-          if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0, blast: 1.0 };
+          if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0, blast: 1.0, duration: 1.0 };
           this.activeFormatSpec.bodies[type].speed = val;
           this.respawnSimulation();
         });
@@ -1259,8 +1299,19 @@ class StudioController {
         entityBlastSliders[type].addEventListener('input', (e) => {
           const val = parseFloat(e.target.value);
           entityBlastLabels[type].textContent = `${val.toFixed(2)}x`;
-          if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0, blast: 1.0 };
+          if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0, blast: 1.0, duration: 1.0 };
           this.activeFormatSpec.bodies[type].blast = val;
+          this.respawnSimulation();
+        });
+      }
+
+      // 5. Duration Scale Slider
+      if (entityDurationSliders[type]) {
+        entityDurationSliders[type].addEventListener('input', (e) => {
+          const val = parseFloat(e.target.value);
+          entityDurationLabels[type].textContent = `${val.toFixed(2)}x`;
+          if (!this.activeFormatSpec.bodies[type]) this.activeFormatSpec.bodies[type] = { count: 0, size: 1.0, speed: 1.0, blast: 1.0, duration: 1.0 };
+          this.activeFormatSpec.bodies[type].duration = val;
           this.respawnSimulation();
         });
       }
@@ -1294,11 +1345,27 @@ class StudioController {
       this.respawnSimulation();
     });
 
+    // User Spark Explosion Duration Slider
+    sliderSparkDuration.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      this.activeFormatSpec.sparkDurationScale = val;
+      labelSparkDuration.textContent = `${val.toFixed(2)}x (${(2.8 * val).toFixed(1)}s)`;
+      this.respawnSimulation();
+    });
+
     // Chain Explosion Base Radius Slider
     sliderChainBlast.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value);
       this.activeFormatSpec.chainBlastScale = val;
       labelChainBlast.textContent = `${val.toFixed(2)}x (${this.getBlastLabel(val)})`;
+      this.respawnSimulation();
+    });
+
+    // Chain Explosion Base Duration Slider
+    sliderChainDuration.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      this.activeFormatSpec.chainDurationScale = val;
+      labelChainDuration.textContent = `${val.toFixed(2)}x (${(2.8 * val).toFixed(1)}s)`;
       this.respawnSimulation();
     });
 

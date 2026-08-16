@@ -193,6 +193,13 @@
                     </div>
                     <input id="slider-blast-standard" class="studio-slider mini-slider" type="range" min="0.5" max="2.5" step="0.05" value="1.0">
                   </div>
+                  <div class="tuning-col">
+                    <div class="tuning-label-row">
+                      <span>Dur</span>
+                      <span id="val-duration-standard" class="tuning-val">1.0x</span>
+                    </div>
+                    <input id="slider-duration-standard" class="studio-slider mini-slider" type="range" min="0.4" max="3.0" step="0.05" value="1.0">
+                  </div>
                 </div>
               </div>
 
@@ -230,6 +237,13 @@
                       <span id="val-blast-mega" class="tuning-val">1.0x</span>
                     </div>
                     <input id="slider-blast-mega" class="studio-slider mini-slider" type="range" min="0.5" max="2.5" step="0.05" value="1.0">
+                  </div>
+                  <div class="tuning-col">
+                    <div class="tuning-label-row">
+                      <span>Dur</span>
+                      <span id="val-duration-mega" class="tuning-val">1.0x</span>
+                    </div>
+                    <input id="slider-duration-mega" class="studio-slider mini-slider" type="range" min="0.4" max="3.0" step="0.05" value="1.0">
                   </div>
                 </div>
               </div>
@@ -269,6 +283,13 @@
                     </div>
                     <input id="slider-blast-splitter" class="studio-slider mini-slider" type="range" min="0.5" max="2.5" step="0.05" value="1.0">
                   </div>
+                  <div class="tuning-col">
+                    <div class="tuning-label-row">
+                      <span>Dur</span>
+                      <span id="val-duration-splitter" class="tuning-val">1.0x</span>
+                    </div>
+                    <input id="slider-duration-splitter" class="studio-slider mini-slider" type="range" min="0.4" max="3.0" step="0.05" value="1.0">
+                  </div>
                 </div>
               </div>
 
@@ -306,6 +327,13 @@
                       <span id="val-blast-vortex" class="tuning-val">1.0x</span>
                     </div>
                     <input id="slider-blast-vortex" class="studio-slider mini-slider" type="range" min="0.5" max="2.5" step="0.05" value="1.0">
+                  </div>
+                  <div class="tuning-col">
+                    <div class="tuning-label-row">
+                      <span>Dur</span>
+                      <span id="val-duration-vortex" class="tuning-val">1.0x</span>
+                    </div>
+                    <input id="slider-duration-vortex" class="studio-slider mini-slider" type="range" min="0.4" max="3.0" step="0.05" value="1.0">
                   </div>
                 </div>
               </div>
@@ -345,6 +373,13 @@
                     </div>
                     <input id="slider-blast-longburner" class="studio-slider mini-slider" type="range" min="0.5" max="2.5" step="0.05" value="1.0">
                   </div>
+                  <div class="tuning-col">
+                    <div class="tuning-label-row">
+                      <span>Dur</span>
+                      <span id="val-duration-longburner" class="tuning-val">1.0x</span>
+                    </div>
+                    <input id="slider-duration-longburner" class="studio-slider mini-slider" type="range" min="0.4" max="3.0" step="0.05" value="1.0">
+                  </div>
                 </div>
               </div>
 
@@ -382,6 +417,13 @@
                       <span id="val-blast-speedster" class="tuning-val">1.0x</span>
                     </div>
                     <input id="slider-blast-speedster" class="studio-slider mini-slider" type="range" min="0.5" max="2.5" step="0.05" value="1.0">
+                  </div>
+                  <div class="tuning-col">
+                    <div class="tuning-label-row">
+                      <span>Dur</span>
+                      <span id="val-duration-speedster" class="tuning-val">1.0x</span>
+                    </div>
+                    <input id="slider-duration-speedster" class="studio-slider mini-slider" type="range" min="0.4" max="3.0" step="0.05" value="1.0">
                   </div>
                 </div>
               </div>
@@ -421,6 +463,13 @@
                     </div>
                     <input id="slider-blast-catalyst" class="studio-slider mini-slider" type="range" min="0.5" max="2.5" step="0.05" value="1.0">
                   </div>
+                  <div class="tuning-col">
+                    <div class="tuning-label-row">
+                      <span>Dur</span>
+                      <span id="val-duration-catalyst" class="tuning-val">1.0x</span>
+                    </div>
+                    <input id="slider-duration-catalyst" class="studio-slider mini-slider" type="range" min="0.4" max="3.0" step="0.05" value="1.0">
+                  </div>
                 </div>
               </div>
             </div>
@@ -459,6 +508,15 @@
               <input id="slider-spark-blast" class="studio-slider" type="range" min="0.5" max="2.5" step="0.05" value="1.0">
             </div>
 
+            <!-- User Spark Explosion Duration -->
+            <div class="spark-duration-control-group" style="margin-top: 10px;">
+              <div class="control-label-row">
+                <span>⏱️ User Spark Explosion Duration</span>
+                <span id="label-spark-duration" class="badge-pill highlight-cyan">1.0x (2.8s)</span>
+              </div>
+              <input id="slider-spark-duration" class="studio-slider" type="range" min="0.4" max="3.0" step="0.05" value="1.0">
+            </div>
+
             <!-- Chain Explosion Base Radius -->
             <div class="chain-blast-control-group" style="margin-top: 10px;">
               <div class="control-label-row">
@@ -466,6 +524,15 @@
                 <span id="label-chain-blast" class="badge-pill highlight-cyan">1.0x (Standard)</span>
               </div>
               <input id="slider-chain-blast" class="studio-slider" type="range" min="0.5" max="2.5" step="0.05" value="1.0">
+            </div>
+
+            <!-- Chain Explosion Base Duration -->
+            <div class="chain-duration-control-group" style="margin-top: 10px;">
+              <div class="control-label-row">
+                <span>⏳ Chain Explosion Base Duration</span>
+                <span id="label-chain-duration" class="badge-pill highlight-cyan">1.0x (2.8s)</span>
+              </div>
+              <input id="slider-chain-duration" class="studio-slider" type="range" min="0.4" max="3.0" step="0.05" value="1.0">
             </div>
 
             <!-- Spark Charges -->

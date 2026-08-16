@@ -34,6 +34,8 @@ export function resolveLevelConfig(levelData, platform = 'desktop') {
       bodySizeScale: levelData.bodySizeScale || 1.0,
       sparkBlastScale: levelData.sparkBlastScale || 1.0,
       chainBlastScale: levelData.chainBlastScale || 1.0,
+      sparkDurationScale: levelData.sparkDurationScale || 1.0,
+      chainDurationScale: levelData.chainDurationScale || 1.0,
       parTime: levelData.parTime || 5.0,
       charges: levelData.charges || 1,
       distribution: levelData.distribution || { standard: 8 },
@@ -59,11 +61,13 @@ export function resolveLevelConfig(levelData, platform = 'desktop') {
     }
   }
 
-  // Canonicalize top-level blast scales
+  // Canonicalize top-level blast & duration scales
   if (fmt.sparkBlastScale === undefined) fmt.sparkBlastScale = 1.0;
   if (fmt.chainBlastScale === undefined) fmt.chainBlastScale = 1.0;
+  if (fmt.sparkDurationScale === undefined) fmt.sparkDurationScale = 1.0;
+  if (fmt.chainDurationScale === undefined) fmt.chainDurationScale = 1.0;
 
-  // Canonicalize per-body configuration { count, size, speed, blast }
+  // Canonicalize per-body configuration { count, size, speed, blast, duration }
   const defaultSize = fmt.bodySizeScale || (p === 'mobile' ? 1.15 : 1.0);
   const bodies = {};
   let totalCount = 0;
@@ -76,10 +80,11 @@ export function resolveLevelConfig(levelData, platform = 'desktop') {
       const size = typeof b === 'object' && b.size !== undefined ? b.size : defaultSize;
       const speed = typeof b === 'object' && b.speed !== undefined ? b.speed : 1.0;
       const blast = typeof b === 'object' && b.blast !== undefined ? b.blast : 1.0;
-      bodies[type] = { count, size, speed, blast };
+      const duration = typeof b === 'object' && b.duration !== undefined ? b.duration : 1.0;
+      bodies[type] = { count, size, speed, blast, duration };
     } else {
       const count = (fmt.distribution && fmt.distribution[type]) || 0;
-      bodies[type] = { count, size: defaultSize, speed: 1.0, blast: 1.0 };
+      bodies[type] = { count, size: defaultSize, speed: 1.0, blast: 1.0, duration: 1.0 };
     }
     dist[type] = bodies[type].count;
     totalCount += bodies[type].count;

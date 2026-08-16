@@ -403,6 +403,8 @@ export class ChainReactionGame {
     this.bodySizeScale = lvl.bodySizeScale || (this.platform === 'mobile' ? 1.15 : 1.0);
     this.sparkBlastScale = lvl.sparkBlastScale || 1.0;
     this.chainBlastScale = lvl.chainBlastScale || 1.0;
+    this.sparkDurationScale = lvl.sparkDurationScale || 1.0;
+    this.chainDurationScale = lvl.chainDurationScale || 1.0;
     this.walls = lvl.walls || [];
 
     this.explosions = [];
@@ -416,8 +418,9 @@ export class ChainReactionGame {
       const size = typeof bodySpec === 'object' && bodySpec.size !== undefined ? bodySpec.size : this.bodySizeScale;
       const speedScale = typeof bodySpec === 'object' && bodySpec.speed !== undefined ? bodySpec.speed : 1.0;
       const blastScale = typeof bodySpec === 'object' && bodySpec.blast !== undefined ? bodySpec.blast : 1.0;
+      const durationScale = typeof bodySpec === 'object' && bodySpec.duration !== undefined ? bodySpec.duration : 1.0;
       for (let i = 0; i < count; i++) {
-        typesToSpawn.push({ typeId, size, speedScale, blastScale });
+        typesToSpawn.push({ typeId, size, speedScale, blastScale, durationScale });
       }
     }
 
@@ -426,7 +429,7 @@ export class ChainReactionGame {
       const margin = 28 * this.scale;
       const x = this.arena.x + margin + Math.random() * (this.arena.width - margin * 2);
       const y = this.arena.y + margin + Math.random() * (this.arena.height - margin * 2);
-      this.particles.push(new Particle(x, y, item.typeId, speed, this.arena, this.scale, item.size, item.speedScale, item.blastScale));
+      this.particles.push(new Particle(x, y, item.typeId, speed, this.arena, this.scale, item.size, item.speedScale, item.blastScale, item.durationScale));
     });
 
     this.notifyHUD();
@@ -448,10 +451,10 @@ export class ChainReactionGame {
 
     const config = {
       baseRadius: 65 * (this.sparkBlastScale || 1.0),
-      baseDuration: 2.8
+      baseDuration: 2.8 * (this.sparkDurationScale || 1.0)
     };
 
-    this.explosions.push(new Explosion(x, y, null, config, Math.random() * Math.PI, true, this.scale, 1.0));
+    this.explosions.push(new Explosion(x, y, null, config, Math.random() * Math.PI, true, this.scale, 1.0, 1.0));
     this.sparklePool.spawnBurst(x, y, '#38bdf8', 16, 1.1, this.scale);
 
     this.grid.applyExplosionImpulse(x, y, 75 * this.scale * (this.sparkBlastScale || 1.0), 70, false);
@@ -527,7 +530,7 @@ export class ChainReactionGame {
 
     const config = {
       baseRadius: 65 * (this.chainBlastScale || 1.0),
-      baseDuration: 2.8
+      baseDuration: 2.8 * (this.chainDurationScale || 1.0)
     };
 
     // Update Particles & Collision
@@ -557,7 +560,7 @@ export class ChainReactionGame {
 
           soundEngine.playExplosionChime(this.comboChain, p.type.id);
 
-          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false, this.scale, p.blastScale || 1.0));
+          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false, this.scale, p.blastScale || 1.0, p.durationScale || 1.0));
           this.grid.applyExplosionImpulse(p.x, p.y, 60 * this.scale * (p.blastScale || 1.0), 50, false);
 
           const sparkleCount = Math.min(28, 16 + this.comboChain);
@@ -625,7 +628,7 @@ export class ChainReactionGame {
           this.score += points;
 
           soundEngine.playExplosionChime(this.comboChain, p.type.id);
-          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false, this.scale, p.blastScale || 1.0));
+          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false, this.scale, p.blastScale || 1.0, p.durationScale || 1.0));
           this.grid.applyExplosionImpulse(p.x, p.y, 50 * this.scale * (p.blastScale || 1.0), 40, false);
           
           this.sparklePool.spawnBurst(p.x, p.y, '#e879f9', 16, 1.1, this.scale);

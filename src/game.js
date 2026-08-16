@@ -401,6 +401,8 @@ export class ChainReactionGame {
     const speed = lvl.baseSpeed || 2.4;
     this.currentSpeedLabel = lvl.speedLabel || 'Normal';
     this.bodySizeScale = lvl.bodySizeScale || (this.platform === 'mobile' ? 1.15 : 1.0);
+    this.sparkBlastScale = lvl.sparkBlastScale || 1.0;
+    this.chainBlastScale = lvl.chainBlastScale || 1.0;
     this.walls = lvl.walls || [];
 
     this.explosions = [];
@@ -413,8 +415,9 @@ export class ChainReactionGame {
       const count = typeof bodySpec === 'number' ? bodySpec : (bodySpec.count || 0);
       const size = typeof bodySpec === 'object' && bodySpec.size !== undefined ? bodySpec.size : this.bodySizeScale;
       const speedScale = typeof bodySpec === 'object' && bodySpec.speed !== undefined ? bodySpec.speed : 1.0;
+      const blastScale = typeof bodySpec === 'object' && bodySpec.blast !== undefined ? bodySpec.blast : 1.0;
       for (let i = 0; i < count; i++) {
-        typesToSpawn.push({ typeId, size, speedScale });
+        typesToSpawn.push({ typeId, size, speedScale, blastScale });
       }
     }
 
@@ -423,7 +426,7 @@ export class ChainReactionGame {
       const margin = 28 * this.scale;
       const x = this.arena.x + margin + Math.random() * (this.arena.width - margin * 2);
       const y = this.arena.y + margin + Math.random() * (this.arena.height - margin * 2);
-      this.particles.push(new Particle(x, y, item.typeId, speed, this.arena, this.scale, item.size, item.speedScale));
+      this.particles.push(new Particle(x, y, item.typeId, speed, this.arena, this.scale, item.size, item.speedScale, item.blastScale));
     });
 
     this.notifyHUD();
@@ -444,14 +447,14 @@ export class ChainReactionGame {
     soundEngine.playSeedTrigger();
 
     const config = {
-      baseRadius: 65,
+      baseRadius: 65 * (this.sparkBlastScale || 1.0),
       baseDuration: 2.8
     };
 
-    this.explosions.push(new Explosion(x, y, null, config, Math.random() * Math.PI, true, this.scale));
+    this.explosions.push(new Explosion(x, y, null, config, Math.random() * Math.PI, true, this.scale, 1.0));
     this.sparklePool.spawnBurst(x, y, '#38bdf8', 16, 1.1, this.scale);
 
-    this.grid.applyExplosionImpulse(x, y, 75 * this.scale, 70, false);
+    this.grid.applyExplosionImpulse(x, y, 75 * this.scale * (this.sparkBlastScale || 1.0), 70, false);
 
     this.charges--;
     this.state = 'active';
@@ -523,7 +526,7 @@ export class ChainReactionGame {
     this.grid.update(dt);
 
     const config = {
-      baseRadius: 65,
+      baseRadius: 65 * (this.chainBlastScale || 1.0),
       baseDuration: 2.8
     };
 
@@ -554,8 +557,8 @@ export class ChainReactionGame {
 
           soundEngine.playExplosionChime(this.comboChain, p.type.id);
 
-          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false, this.scale));
-          this.grid.applyExplosionImpulse(p.x, p.y, 60 * this.scale, 50, false);
+          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false, this.scale, p.blastScale || 1.0));
+          this.grid.applyExplosionImpulse(p.x, p.y, 60 * this.scale * (p.blastScale || 1.0), 50, false);
 
           const sparkleCount = Math.min(28, 16 + this.comboChain);
           this.sparklePool.spawnBurst(p.x, p.y, p.type.color, sparkleCount, 1.0 + Math.min(0.4, this.comboChain * 0.02), this.scale);
@@ -622,8 +625,8 @@ export class ChainReactionGame {
           this.score += points;
 
           soundEngine.playExplosionChime(this.comboChain, p.type.id);
-          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false, this.scale));
-          this.grid.applyExplosionImpulse(p.x, p.y, 50 * this.scale, 40, false);
+          this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false, this.scale, p.blastScale || 1.0));
+          this.grid.applyExplosionImpulse(p.x, p.y, 50 * this.scale * (p.blastScale || 1.0), 40, false);
           
           this.sparklePool.spawnBurst(p.x, p.y, '#e879f9', 16, 1.1, this.scale);
           this.floatingTexts.push(new FloatingText(p.x, p.y, `+${points} [SHARD]`, '#e879f9', 16, false, this.scale));

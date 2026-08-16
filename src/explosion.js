@@ -119,12 +119,13 @@ export class SparklePool {
 }
 
 export class Explosion {
-  constructor(x, y, particleType = null, config = { baseRadius: 65, baseDuration: 2.8 }, initialRotation = 0, isSeed = false, scale = 1.0) {
+  constructor(x, y, particleType = null, config = { baseRadius: 65, baseDuration: 2.8 }, initialRotation = 0, isSeed = false, scale = 1.0, blastScale = 1.0) {
     this.x = x;
     this.y = y;
     this.particleType = particleType;
     this.isSeed = isSeed;
     this.scale = scale;
+    this.blastScale = blastScale || 1.0;
     
     if (particleType) {
       this.sides = particleType.sides || 6;
@@ -144,9 +145,12 @@ export class Explosion {
     const seedRadiusMultiplier = isSeed ? 1.35 : 1.0;
     const seedDurationMultiplier = isSeed ? 1.2 : 1.0;
 
-    // Physical radius scaled to arena dimensions
-    this.maxRadius = config.baseRadius * radiusMod * seedRadiusMultiplier * scale;
-    this.duration = config.baseDuration * durationMod * seedDurationMultiplier;
+    const baseR = (config && config.baseRadius) ? config.baseRadius : 65;
+    const baseD = (config && config.baseDuration) ? config.baseDuration : 2.8;
+
+    // Physical radius scaled to arena dimensions with custom blastScale
+    this.maxRadius = baseR * radiusMod * seedRadiusMultiplier * scale * this.blastScale;
+    this.duration = baseD * durationMod * seedDurationMultiplier;
     this.isVortex = particleType ? !!particleType.isVortex : false;
     this.vortexForce = particleType ? (particleType.vortexForce || 240) * scale : 0;
 

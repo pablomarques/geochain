@@ -32,6 +32,8 @@ export function resolveLevelConfig(levelData, platform = 'desktop') {
       baseSpeed: levelData.baseSpeed || 2.4,
       speedLabel: levelData.speedLabel || 'Normal',
       bodySizeScale: levelData.bodySizeScale || 1.0,
+      sparkBlastScale: levelData.sparkBlastScale || 1.0,
+      chainBlastScale: levelData.chainBlastScale || 1.0,
       parTime: levelData.parTime || 5.0,
       charges: levelData.charges || 1,
       distribution: levelData.distribution || { standard: 8 },
@@ -57,7 +59,11 @@ export function resolveLevelConfig(levelData, platform = 'desktop') {
     }
   }
 
-  // Canonicalize per-body configuration { count, size, speed }
+  // Canonicalize top-level blast scales
+  if (fmt.sparkBlastScale === undefined) fmt.sparkBlastScale = 1.0;
+  if (fmt.chainBlastScale === undefined) fmt.chainBlastScale = 1.0;
+
+  // Canonicalize per-body configuration { count, size, speed, blast }
   const defaultSize = fmt.bodySizeScale || (p === 'mobile' ? 1.15 : 1.0);
   const bodies = {};
   let totalCount = 0;
@@ -69,10 +75,11 @@ export function resolveLevelConfig(levelData, platform = 'desktop') {
       const count = typeof b === 'number' ? b : (b.count || 0);
       const size = typeof b === 'object' && b.size !== undefined ? b.size : defaultSize;
       const speed = typeof b === 'object' && b.speed !== undefined ? b.speed : 1.0;
-      bodies[type] = { count, size, speed };
+      const blast = typeof b === 'object' && b.blast !== undefined ? b.blast : 1.0;
+      bodies[type] = { count, size, speed, blast };
     } else {
       const count = (fmt.distribution && fmt.distribution[type]) || 0;
-      bodies[type] = { count, size: defaultSize, speed: 1.0 };
+      bodies[type] = { count, size: defaultSize, speed: 1.0, blast: 1.0 };
     }
     dist[type] = bodies[type].count;
     totalCount += bodies[type].count;

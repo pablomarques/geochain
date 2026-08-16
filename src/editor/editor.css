@@ -548,6 +548,48 @@ html, body {
   gap: 8px;
 }
 
+/* Platform Spec Tab Switcher */
+.format-spec-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+.format-target-pills {
+  display: flex;
+  gap: 6px;
+}
+
+.format-target-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.format-target-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.format-target-btn.active {
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  color: #030712;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+}
+
 /* Entity Sliders List */
 .entity-sliders-list {
   display: flex;

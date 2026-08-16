@@ -122,8 +122,9 @@ function gameLoop(time) {
 }
 
 function handleGameStateChange(data) {
+  const platformLabel = data.platform === 'mobile' ? ' [📱 Mobile]' : '';
   headerCampaignBadge.textContent = data.campaign.badge || '🌌';
-  headerCampaignTitle.textContent = data.campaign.title;
+  headerCampaignTitle.textContent = `${data.campaign.title}${platformLabel}`;
 
   hudScoreValue.textContent = data.score.toLocaleString();
   hudComboValue.textContent = `x${data.combo}`;
@@ -143,7 +144,7 @@ function handleGameStateChange(data) {
   const lvlConfig = levels[data.level - 1];
   if (lvlConfig && data.state === 'ready') {
     const starT = lvlConfig.stars ? ` (3★ @ ${lvlConfig.stars[2]})` : '';
-    const speedBadge = lvlConfig.speedLabel ? ` • Speed: ${lvlConfig.speedLabel}` : '';
+    const speedBadge = data.speedLabel ? ` • Speed: ${data.speedLabel}` : '';
     hintBanner.textContent = `${lvlConfig.tip || 'Click to initiate reaction'}${starT}${speedBadge}`;
     hintBanner.classList.remove('hide');
   } else {
@@ -153,7 +154,8 @@ function handleGameStateChange(data) {
 
 // Render Level Top 10 Comparison Table in Scorecard
 function renderLevelComparisonTable(comparison, playerTag = 'ACE') {
-  levelLeaderboardTitle.textContent = `Level ${comparison.level} Top 10 (Global)`;
+  const platformStr = comparison.platform === 'mobile' ? 'Mobile' : 'Desktop';
+  levelLeaderboardTitle.textContent = `Level ${comparison.level} Top 10 (${platformStr})`;
   levelTop10Rows.innerHTML = '';
 
   const { rank, qualifies, top10, score, combo } = comparison;
@@ -299,11 +301,12 @@ async function handleLevelComplete(result) {
 
   // 2. Fetch Live Cloud Level Scores in background and refresh
   try {
-    const cloudScores = await cloudLeaderboard.fetchLevelTop10(result.level);
+    const cloudScores = await cloudLeaderboard.fetchLevelTop10(result.level, game.platform);
     if (cloudScores && cloudScores.length > 0) {
       let rank = cloudScores.filter(item => item.score >= result.score).length + 1;
       const cloudComp = {
         level: result.level,
+        platform: game.platform,
         score: result.score,
         combo: game.highestCombo,
         rank,
@@ -339,7 +342,7 @@ async function renderLeaderboard() {
       leaderboardRows.innerHTML = `
         <tr>
           <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">
-            No records found yet.
+            No ${game.platform} records found yet.
           </td>
         </tr>
       `;
@@ -369,7 +372,7 @@ async function renderLeaderboard() {
   renderRows(scores);
 
   try {
-    const cloudScores = await cloudLeaderboard.fetchGlobalTop10('all');
+    const cloudScores = await cloudLeaderboard.fetchGlobalTop10(game.platform);
     if (cloudScores && cloudScores.length > 0) {
       renderRows(cloudScores);
     }
@@ -445,7 +448,7 @@ function openLevelSelectModal() {
   levelsGrid.innerHTML = '';
   
   const campaign = game.currentCampaign;
-  levelsModalCampaignTitle.textContent = `${campaign.badge || '🌌'} ${campaign.title}`;
+  levelsModalCampaignTitle.textContent = `${campaign.badge || '🌌'} ${campaign.title} (${game.platform === 'mobile' ? 'Mobile' : 'Desktop'})`;
   levelsModalCampaignDesc.textContent = campaign.tagline || 'Select a stage to initiate geometric cascade test.';
 
   const progress = game.getCampaignProgress(campaign.id);
@@ -470,7 +473,7 @@ function openLevelSelectModal() {
     btn.innerHTML = `
       <div class="level-num">${lvl.level}</div>
       <div class="level-stars-mini">${starsDisplay}</div>
-      <div style="font-size: 0.62rem; color: var(--text-muted);">${lvl.speedLabel}</div>
+      <div style="font-size: 0.62rem; color: var(--text-muted);">${lvl.speedLabel || 'Normal'}</div>
     `;
 
     if (isUnlocked) {
@@ -523,7 +526,7 @@ function setupEventListeners() {
   btnCloseLeaderboard.addEventListener('click', () => modalLeaderboard.classList.remove('show'));
 
   btnClearScores.addEventListener('click', () => {
-    if (confirm('Are you sure you want to reset your local high score cache?')) {
+    if (confirm(`Are you sure you want to reset your local ${game.platform} high score cache?`)) {
       game.clearHighScores();
       renderLeaderboard();
     }

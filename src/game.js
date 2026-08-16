@@ -1,7 +1,7 @@
 import { Particle, Shrapnel, PARTICLE_TYPES, REFERENCE_ARENA, drawObstacleWall } from './particles.js';
 import { Explosion, SparklePool } from './explosion.js';
 import { ElasticSpacetimeGrid } from './grid.js';
-import { CAMPAIGNS } from './levels.js';
+import { CAMPAIGNS, resolveLevelConfig } from './levels.js';
 import { soundEngine } from './audio.js';
 import { cloudLeaderboard } from './leaderboard.js';
 
@@ -57,7 +57,10 @@ export class ChainReactionGame {
     this.width = canvas.width;
     this.height = canvas.height;
 
-    // Centered Vector Arena with Proportional Scaling (16:10 aspect ratio)
+    // Platform detection (Desktop vs. Mobile Portrait)
+    this.platform = this.detectPlatform();
+
+    // Centered Vector Arena with Proportional Scaling
     this.arena = {
       x: 0,
       y: 0,
@@ -72,15 +75,15 @@ export class ChainReactionGame {
 
     // Campaigns & State
     this.campaigns = CAMPAIGNS;
-    this.currentCampaignId = localStorage.getItem('cr_active_campaign_id') || 'genesis';
+    this.currentCampaignId = localStorage.getItem(`cr_active_campaign_${this.platform}`) || 'genesis';
     this.currentCampaign = this.campaigns.find(c => c.id === this.currentCampaignId) || this.campaigns[0];
     this.currentLevelIndex = 0;
     this.state = 'ready';
 
-    // Campaign Progress Map
+    // Campaign Progress Map per Platform
     this.campaignProgress = this.loadCampaignProgress();
 
-    // High Scores & Cloud Sync
+    // High Scores & Cloud Sync per Platform
     this.levelHighScores = this.loadLevelHighScores();
     this.highScores = this.loadGlobalHighScores();
 
@@ -120,24 +123,30 @@ export class ChainReactionGame {
     this.initAmbientMotes();
   }
 
+  detectPlatform() {
+    const w = window.innerWidth || this.width || 960;
+    const h = window.innerHeight || this.height || 600;
+    return (w <= 768 || h > w) ? 'mobile' : 'desktop';
+  }
+
   loadCampaignProgress() {
     try {
-      const stored = localStorage.getItem('cr_campaign_progress');
+      const stored = localStorage.getItem(`cr_campaign_progress_${this.platform}`);
       if (stored) return JSON.parse(stored);
     } catch (e) {
       console.error(e);
     }
     return {
       genesis: {
-        unlockedLevel: parseInt(localStorage.getItem('cr_unlocked_level') || '1', 10),
-        levelStars: JSON.parse(localStorage.getItem('cr_level_stars') || '{}')
+        unlockedLevel: 1,
+        levelStars: {}
       }
     };
   }
 
   saveCampaignProgress() {
     try {
-      localStorage.setItem('cr_campaign_progress', JSON.stringify(this.campaignProgress));
+      localStorage.setItem(`cr_campaign_progress_${this.platform}`, JSON.stringify(this.campaignProgress));
     } catch (e) {
       console.error(e);
     }
@@ -160,7 +169,7 @@ export class ChainReactionGame {
 
     this.currentCampaignId = campaignId;
     this.currentCampaign = found;
-    localStorage.setItem('cr_active_campaign_id', campaignId);
+    localStorage.setItem(`cr_active_campaign_${this.platform}`, campaignId);
     
     this.startCampaignLevel(0);
     return true;
@@ -168,7 +177,7 @@ export class ChainReactionGame {
 
   loadLevelHighScores() {
     try {
-      const stored = localStorage.getItem('cr_level_high_scores');
+      const stored = localStorage.getItem(`cr_level_high_scores_${this.platform}`);
       if (stored) return JSON.parse(stored);
     } catch (e) {
       console.error(e);
@@ -183,7 +192,7 @@ export class ChainReactionGame {
         name,
         score: Math.round(base * (1.65 - i * 0.09)),
         combo: Math.max(3, Math.round(lvl * 2.2 + (10 - i))),
-        date: 'Aug 14'
+        date: 'Aug 15'
       }));
     }
     return defaults;
@@ -191,7 +200,7 @@ export class ChainReactionGame {
 
   saveLevelHighScores() {
     try {
-      localStorage.setItem('cr_level_high_scores', JSON.stringify(this.levelHighScores));
+      localStorage.setItem(`cr_level_high_scores_${this.platform}`, JSON.stringify(this.levelHighScores));
     } catch (e) {
       console.error(e);
     }
@@ -205,7 +214,7 @@ export class ChainReactionGame {
         name,
         score: Math.round(base * (1.65 - i * 0.09)),
         combo: Math.max(3, Math.round(lvlNum * 2.2 + (10 - i))),
-        date: 'Aug 14'
+        date: 'Aug 15'
       }));
       this.saveLevelHighScores();
     }
@@ -221,6 +230,7 @@ export class ChainReactionGame {
 
     return {
       level: lvlNum,
+      platform: this.platform,
       score,
       combo,
       date: dateStr,
@@ -249,32 +259,30 @@ export class ChainReactionGame {
 
     this.addGlobalHighScore(tag, score, lvlNum, combo);
 
-    // Sync to Persistent Cloud Database
-    cloudLeaderboard.submitScore(tag, score, combo, lvlNum, 'Campaign');
+    // Sync to Persistent Cloud Database with Platform separation
+    cloudLeaderboard.submitScore(tag, score, combo, lvlNum, this.platform);
   }
 
   loadGlobalHighScores() {
     try {
-      const stored = localStorage.getItem('cr_high_scores');
+      const stored = localStorage.getItem(`cr_high_scores_${this.platform}`);
       if (stored) return JSON.parse(stored);
     } catch (e) {
       console.error(e);
     }
     return [
-      { name: 'ACE', score: 25000, level: 12, combo: 34, date: 'Aug 14' },
-      { name: 'NEO', score: 18500, level: 9, combo: 28, date: 'Aug 14' },
-      { name: 'FOX', score: 16200, level: 8, combo: 22, date: 'Aug 14' },
-      { name: 'VEX', score: 14200, level: 6, combo: 24, date: 'Aug 14' },
-      { name: 'RAY', score: 12400, level: 5, combo: 19, date: 'Aug 14' },
-      { name: 'ZEN', score: 11000, level: 3, combo: 20, date: 'Aug 14' },
-      { name: 'ION', score: 9800, level: 2, combo: 15, date: 'Aug 14' },
-      { name: 'ARC', score: 8500, level: 1, combo: 16, date: 'Aug 14' }
+      { name: 'ACE', score: 25000, level: 12, combo: 34, date: 'Aug 15' },
+      { name: 'NEO', score: 18500, level: 9, combo: 28, date: 'Aug 15' },
+      { name: 'FOX', score: 16200, level: 8, combo: 22, date: 'Aug 15' },
+      { name: 'VEX', score: 14200, level: 6, combo: 24, date: 'Aug 15' },
+      { name: 'RAY', score: 12400, level: 5, combo: 19, date: 'Aug 15' },
+      { name: 'ZEN', score: 11000, level: 3, combo: 20, date: 'Aug 15' }
     ];
   }
 
   saveGlobalHighScores() {
     try {
-      localStorage.setItem('cr_high_scores', JSON.stringify(this.highScores));
+      localStorage.setItem(`cr_high_scores_${this.platform}`, JSON.stringify(this.highScores));
     } catch (e) {
       console.error(e);
     }
@@ -305,25 +313,29 @@ export class ChainReactionGame {
   }
 
   calculateArenaBounds() {
-    const availableWidth = Math.max(320, this.width - 40);
-    const availableHeight = Math.max(240, this.height - 150);
+    const availableWidth = Math.max(300, this.width - 24);
+    const availableHeight = Math.max(220, this.height - 140);
 
-    let arenaW = Math.min(availableWidth, availableHeight * 1.6);
-    let arenaH = arenaW / 1.6;
+    const isMobile = this.platform === 'mobile';
+    const targetAspect = isMobile ? (9 / 16) : 1.6;
+
+    let arenaW = availableWidth;
+    let arenaH = arenaW / targetAspect;
 
     if (arenaH > availableHeight) {
       arenaH = availableHeight;
-      arenaW = arenaH * 1.6;
+      arenaW = arenaH * targetAspect;
     }
 
     this.arena = {
       x: Math.round((this.width - arenaW) / 2),
-      y: Math.round(75 + (availableHeight - arenaH) / 2),
+      y: Math.round(70 + (availableHeight - arenaH) / 2),
       width: Math.round(arenaW),
       height: Math.round(arenaH)
     };
 
-    this.scale = this.arena.width / REFERENCE_ARENA.width;
+    const refW = isMobile ? 540 : REFERENCE_ARENA.width;
+    this.scale = this.arena.width / refW;
   }
 
   initAmbientMotes() {
@@ -342,10 +354,18 @@ export class ChainReactionGame {
 
   resize(w, h) {
     const oldArena = { ...this.arena };
+    const oldPlatform = this.platform;
     this.width = w;
     this.height = h;
     this.canvas.width = w;
     this.canvas.height = h;
+
+    this.platform = this.detectPlatform();
+    if (oldPlatform !== this.platform) {
+      this.campaignProgress = this.loadCampaignProgress();
+      this.levelHighScores = this.loadLevelHighScores();
+      this.highScores = this.loadGlobalHighScores();
+    }
     
     this.calculateArenaBounds();
 
@@ -362,7 +382,8 @@ export class ChainReactionGame {
     if (!levels || levels.length === 0) return;
 
     this.currentLevelIndex = Math.max(0, Math.min(levelIndex, levels.length - 1));
-    const lvl = levels[this.currentLevelIndex];
+    const rawLvl = levels[this.currentLevelIndex];
+    const lvl = resolveLevelConfig(rawLvl, this.platform);
     
     this.state = 'ready';
     this.explodedCount = 0;
@@ -379,7 +400,7 @@ export class ChainReactionGame {
 
     const speed = lvl.baseSpeed || 2.4;
     this.currentSpeedLabel = lvl.speedLabel || 'Normal';
-    this.bodySizeScale = lvl.bodySizeScale || 1.0;
+    this.bodySizeScale = lvl.bodySizeScale || (this.platform === 'mobile' ? 1.15 : 1.0);
     this.walls = lvl.walls || [];
 
     this.explosions = [];
@@ -396,7 +417,7 @@ export class ChainReactionGame {
 
     typesToSpawn.sort(() => Math.random() - 0.5);
     typesToSpawn.forEach(typeId => {
-      const margin = 30 * this.scale;
+      const margin = 28 * this.scale;
       const x = this.arena.x + margin + Math.random() * (this.arena.width - margin * 2);
       const y = this.arena.y + margin + Math.random() * (this.arena.height - margin * 2);
       this.particles.push(new Particle(x, y, typeId, speed, this.arena, this.scale, this.bodySizeScale));
@@ -427,7 +448,6 @@ export class ChainReactionGame {
     this.explosions.push(new Explosion(x, y, null, config, Math.random() * Math.PI, true, this.scale));
     this.sparklePool.spawnBurst(x, y, '#38bdf8', 16, 1.1, this.scale);
 
-    // Initial grid kinetic impulse
     this.grid.applyExplosionImpulse(x, y, 75 * this.scale, 70, false);
 
     this.charges--;
@@ -497,7 +517,6 @@ export class ChainReactionGame {
       }
     }
 
-    // Update Elastic Grid Springs (120 FPS physics)
     this.grid.update(dt);
 
     const config = {
@@ -533,8 +552,6 @@ export class ChainReactionGame {
           soundEngine.playExplosionChime(this.comboChain, p.type.id);
 
           this.explosions.push(new Explosion(p.x, p.y, p.type, config, p.rotation, false, this.scale));
-
-          // Distortion ripple on detonation
           this.grid.applyExplosionImpulse(p.x, p.y, 60 * this.scale, 50, false);
 
           const sparkleCount = Math.min(28, 16 + this.comboChain);
@@ -613,10 +630,8 @@ export class ChainReactionGame {
       }
     }
 
-    // Update Sparkle Pool
     this.sparklePool.update(dt);
 
-    // Update Floating Texts
     for (let t = this.floatingTexts.length - 1; t >= 0; t--) {
       const ft = this.floatingTexts[t];
       ft.update(dt);
@@ -625,14 +640,12 @@ export class ChainReactionGame {
       }
     }
 
-    // Instant Win Check on 100% Board Wipe
     const remainingAlive = this.particles.filter(p => p.alive).length;
     if (this.state === 'active' && remainingAlive === 0) {
       this.finishCampaignRound(true);
       return;
     }
 
-    // Normal Round End check
     if (this.state === 'active' && this.explosions.length === 0 && this.shrapnels.length === 0) {
       if (this.charges <= 0) {
         this.finishCampaignRound(false);
@@ -641,8 +654,8 @@ export class ChainReactionGame {
   }
 
   finishCampaignRound(isInstantFullWipe = false) {
-    const levels = this.currentCampaign.levels;
-    const lvlConfig = levels[this.currentLevelIndex];
+    const rawLvl = this.currentCampaign.levels[this.currentLevelIndex];
+    const lvlConfig = resolveLevelConfig(rawLvl, this.platform);
     const isSuccess = isInstantFullWipe || (this.explodedCount >= this.targetQuota);
     this.state = isSuccess ? 'cleared' : 'failed';
     this.isTimerRunning = false;
@@ -676,7 +689,8 @@ export class ChainReactionGame {
         this.saveCampaignProgress();
       }
 
-      if (lvlNum >= progress.unlockedLevel && lvlNum < levels.length) {
+      const totalLevels = this.currentCampaign.levels.length;
+      if (lvlNum >= progress.unlockedLevel && lvlNum < totalLevels) {
         progress.unlockedLevel = lvlNum + 1;
         this.saveCampaignProgress();
       }
@@ -687,6 +701,7 @@ export class ChainReactionGame {
         this.callbacks.onLevelComplete({
           success: true,
           level: lvlNum,
+          platform: this.platform,
           exploded: this.explodedCount,
           total: this.totalParticles,
           target: this.targetQuota,
@@ -698,7 +713,7 @@ export class ChainReactionGame {
           chargeBonus: spareChargeBonus,
           score: this.score,
           isFullWipe: isInstantFullWipe || (this.explodedCount === this.totalParticles),
-          hasNextLevel: this.currentLevelIndex < levels.length - 1,
+          hasNextLevel: this.currentLevelIndex < totalLevels - 1,
           levelComparison
         });
       }
@@ -711,6 +726,7 @@ export class ChainReactionGame {
         this.callbacks.onLevelComplete({
           success: false,
           level: lvlNum,
+          platform: this.platform,
           exploded: this.explodedCount,
           total: this.totalParticles,
           target: this.targetQuota,
@@ -729,6 +745,7 @@ export class ChainReactionGame {
     if (this.callbacks.onStateChange) {
       this.callbacks.onStateChange({
         campaign: this.currentCampaign,
+        platform: this.platform,
         state: this.state,
         level: this.currentLevelIndex + 1,
         score: this.score,
@@ -774,34 +791,23 @@ export class ChainReactionGame {
     const { x, y, width: w, height: h } = this.arena;
     ctx.save();
 
-    // Dark surface background
     ctx.fillStyle = 'rgba(10, 15, 26, 0.55)';
     ctx.fillRect(x, y, w, h);
 
-    // Render Elastic Spacetime Grid
     this.grid.draw(ctx);
 
-    // Glowing Neon Perimeter Border
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
     ctx.lineWidth = Math.max(1.2, 1.8 * this.scale);
     ctx.strokeRect(x, y, w, h);
 
-    // Corner Brackets
     const bracketLen = Math.max(14, 24 * this.scale);
     ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = Math.max(1.5, 2.4 * this.scale);
 
-    // Top-Left
     ctx.beginPath();
     ctx.moveTo(x, y + bracketLen); ctx.lineTo(x, y); ctx.lineTo(x + bracketLen, y);
-    // Top-Right
-    ctx.beginPath();
     ctx.moveTo(x + w - bracketLen, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + bracketLen);
-    // Bottom-Left
-    ctx.beginPath();
     ctx.moveTo(x, y + h - bracketLen); ctx.lineTo(x, y + h); ctx.lineTo(x + bracketLen, y + h);
-    // Bottom-Right
-    ctx.beginPath();
     ctx.moveTo(x + w - bracketLen, y + h); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w, y + h - bracketLen);
     ctx.stroke();
 

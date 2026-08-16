@@ -1,7 +1,7 @@
 import { Particle, Shrapnel, PARTICLE_TYPES, REFERENCE_ARENA, drawObstacleWall, checkSegmentCollision } from '../particles.js';
 import { Explosion, SparklePool } from '../explosion.js';
 import { ElasticSpacetimeGrid } from '../grid.js';
-import { CAMPAIGNS } from '../levels.js';
+import { CAMPAIGNS, resolveLevelConfig } from '../levels.js';
 import { soundEngine } from '../audio.js';
 
 // DOM Selectors
@@ -33,6 +33,11 @@ const inputLevelNum = document.getElementById('input-level-num');
 const inputLevelTitle = document.getElementById('input-level-title');
 const inputLevelTip = document.getElementById('input-level-tip');
 const totalParticlesBadge = document.getElementById('total-particles-badge');
+
+// Platform Spec Switcher (Desktop vs Mobile Version)
+const btnTargetDesktop = document.getElementById('btn-target-desktop');
+const btnTargetMobile = document.getElementById('btn-target-mobile');
+const btnSyncFormats = document.getElementById('btn-sync-formats');
 
 // Entity Sliders & Counter Labels
 const entityTypes = ['standard', 'mega', 'splitter', 'vortex', 'longburner', 'speedster', 'catalyst'];
@@ -90,6 +95,7 @@ class StudioController {
     this.campaigns = this.loadWorkingCampaigns();
     this.activeCampaignIndex = 0;
     this.activeLevelIndex = 0;
+    this.editingFormat = 'desktop'; // 'desktop' or 'mobile'
     this.viewportFormat = 'desktop-16-10'; // 'desktop-16-10', 'desktop-16-9', 'mobile-portrait'
     this.simSpeed = 1.0;
     this.isSeedLocked = false;
@@ -120,7 +126,7 @@ class StudioController {
     this.highestCombo = 0;
     this.charges = 1;
     this.elapsedTime = 0;
-    this.simState = 'ready'; // 'ready', 'active', 'finished'
+    this.simState = 'ready';
 
     this.lastFrameTime = performance.now();
 
@@ -153,9 +159,44 @@ class StudioController {
   get activeLevel() {
     const levels = this.activeCampaign.levels;
     const lvl = levels[this.activeLevelIndex] || levels[0];
-    if (!lvl.walls) lvl.walls = [];
-    if (lvl.bodySizeScale === undefined) lvl.bodySizeScale = 1.0;
+    
+    // Ensure dual formats structure exists
+    if (!lvl.formats) {
+      lvl.formats = {
+        desktop: {
+          target: lvl.target || 1,
+          stars: lvl.stars || [1, 3, 5],
+          totalParticles: lvl.totalParticles || 8,
+          baseSpeed: lvl.baseSpeed || 2.4,
+          speedLabel: lvl.speedLabel || 'Normal',
+          bodySizeScale: lvl.bodySizeScale || 1.0,
+          parTime: lvl.parTime || 5.0,
+          charges: lvl.charges || 1,
+          distribution: lvl.distribution || { standard: 8 },
+          walls: lvl.walls || []
+        },
+        mobile: {
+          target: Math.max(1, Math.round((lvl.target || 1) * 0.7)),
+          stars: [Math.max(1, Math.round((lvl.target || 1) * 0.7)), Math.max(2, Math.round((lvl.totalParticles || 8) * 0.4)), Math.max(3, Math.round((lvl.totalParticles || 8) * 0.6))],
+          totalParticles: Math.max(4, Math.round((lvl.totalParticles || 8) * 0.7)),
+          baseSpeed: +(Math.max(1.0, (lvl.baseSpeed || 2.4) * 0.9)).toFixed(1),
+          speedLabel: lvl.speedLabel || 'Normal',
+          bodySizeScale: +(Math.min(2.5, (lvl.bodySizeScale || 1.0) * 1.15)).toFixed(2),
+          parTime: lvl.parTime || 5.0,
+          charges: lvl.charges || 1,
+          distribution: { standard: Math.max(4, Math.round((lvl.totalParticles || 8) * 0.7)) },
+          walls: lvl.walls ? JSON.parse(JSON.stringify(lvl.walls)) : []
+        }
+      };
+    }
+    if (!lvl.formats.desktop) lvl.formats.desktop = { ...lvl.formats.mobile };
+    if (!lvl.formats.mobile) lvl.formats.mobile = { ...lvl.formats.desktop };
+
     return lvl;
+  }
+
+  get activeFormatSpec() {
+    return this.activeLevel.formats[this.editingFormat];
   }
 
   init() {
@@ -198,15 +239,16 @@ class StudioController {
       const card = document.createElement('div');
       card.className = `level-item-card ${idx === this.activeLevelIndex ? 'active' : ''}`;
 
-      const wallCount = (lvl.walls && lvl.walls.length) ? ` • 🧱 ${lvl.walls.length}` : '';
-      const sizeTag = lvl.bodySizeScale && lvl.bodySizeScale !== 1.0 ? ` • ${lvl.bodySizeScale}x Size` : '';
+      const spec = (lvl.formats && lvl.formats[this.editingFormat]) || lvl;
+      const wallCount = (spec.walls && spec.walls.length) ? ` • 🧱 ${spec.walls.length}` : '';
+      const sizeTag = spec.bodySizeScale && spec.bodySizeScale !== 1.0 ? ` • ${spec.bodySizeScale}x` : '';
 
       card.innerHTML = `
         <div class="level-item-left">
           <span class="level-badge-num">${lvl.level || (idx + 1)}</span>
           <div class="level-item-info">
             <span class="level-item-title">${lvl.title || `Stage ${idx + 1}`}</span>
-            <span class="level-item-sub">${lvl.totalParticles || 0} Bodies • ${lvl.speedLabel || 'Normal'}${wallCount}${sizeTag}</span>
+            <span class="level-item-sub">${spec.totalParticles || 0} Bodies • ${spec.speedLabel || 'Normal'}${wallCount}${sizeTag}</span>
           </div>
         </div>
         <div class="level-reorder-btns">
@@ -252,7 +294,6 @@ class StudioController {
     const [moved] = levels.splice(idx, 1);
     levels.splice(targetIdx, 0, moved);
 
-    // Re-index stages
     levels.forEach((lvl, i) => { lvl.level = i + 1; });
 
     this.activeLevelIndex = targetIdx;
@@ -267,17 +308,33 @@ class StudioController {
     const newLvl = {
       level: newStageNum,
       title: `Stage ${newStageNum}`,
-      target: Math.max(1, Math.round(newStageNum * 3.5)),
-      stars: [Math.max(1, Math.round(newStageNum * 3.5)), Math.max(3, Math.round(newStageNum * 5.0)), Math.max(5, Math.round(newStageNum * 6.5))],
-      totalParticles: Math.min(80, 10 + newStageNum * 5),
-      baseSpeed: Math.max(1.1, +(4.6 - (newStageNum - 1) * 0.3).toFixed(1)),
-      speedLabel: this.getSpeedLabel(Math.max(1.1, 4.6 - (newStageNum - 1) * 0.3)),
-      bodySizeScale: 1.0,
-      parTime: +(4.5 + newStageNum * 0.5).toFixed(1),
-      charges: newStageNum > 9 ? 2 : 1,
-      distribution: { standard: Math.min(80, 10 + newStageNum * 5) },
-      walls: [],
-      tip: 'New stage authored in GeoChain Studio.'
+      tip: 'New stage authored in GeoChain Studio.',
+      formats: {
+        desktop: {
+          target: Math.max(1, Math.round(newStageNum * 3.5)),
+          stars: [Math.max(1, Math.round(newStageNum * 3.5)), Math.max(3, Math.round(newStageNum * 5.0)), Math.max(5, Math.round(newStageNum * 6.5))],
+          totalParticles: Math.min(80, 10 + newStageNum * 5),
+          baseSpeed: Math.max(1.1, +(4.6 - (newStageNum - 1) * 0.3).toFixed(1)),
+          speedLabel: this.getSpeedLabel(Math.max(1.1, 4.6 - (newStageNum - 1) * 0.3)),
+          bodySizeScale: 1.0,
+          parTime: +(4.5 + newStageNum * 0.5).toFixed(1),
+          charges: newStageNum > 9 ? 2 : 1,
+          distribution: { standard: Math.min(80, 10 + newStageNum * 5) },
+          walls: []
+        },
+        mobile: {
+          target: Math.max(1, Math.round(newStageNum * 2.5)),
+          stars: [Math.max(1, Math.round(newStageNum * 2.5)), Math.max(2, Math.round(newStageNum * 3.8)), Math.max(4, Math.round(newStageNum * 5.0))],
+          totalParticles: Math.min(55, 8 + newStageNum * 4),
+          baseSpeed: Math.max(1.1, +(4.0 - (newStageNum - 1) * 0.25).toFixed(1)),
+          speedLabel: this.getSpeedLabel(Math.max(1.1, 4.0 - (newStageNum - 1) * 0.25)),
+          bodySizeScale: 1.15,
+          parTime: +(4.5 + newStageNum * 0.5).toFixed(1),
+          charges: newStageNum > 9 ? 2 : 1,
+          distribution: { standard: Math.min(55, 8 + newStageNum * 4) },
+          walls: []
+        }
+      }
     };
 
     levels.push(newLvl);
@@ -313,13 +370,19 @@ class StudioController {
 
   loadLevelToInspector() {
     const lvl = this.activeLevel;
+    const spec = this.activeFormatSpec;
+
     inputLevelNum.value = lvl.level || (this.activeLevelIndex + 1);
     inputLevelTitle.value = lvl.title || '';
     inputLevelTip.value = lvl.tip || '';
 
+    // Target Platform Tab UI
+    btnTargetDesktop.classList.toggle('active', this.editingFormat === 'desktop');
+    btnTargetMobile.classList.toggle('active', this.editingFormat === 'mobile');
+
     // Entity Distribution
     entityTypes.forEach(type => {
-      const count = (lvl.distribution && lvl.distribution[type]) || 0;
+      const count = (spec.distribution && spec.distribution[type]) || 0;
       entitySliders[type].value = count;
       entityValueLabels[type].textContent = count;
     });
@@ -327,30 +390,30 @@ class StudioController {
     this.updateTotalParticlesBadge();
 
     // Velocity
-    const speed = lvl.baseSpeed || 2.4;
+    const speed = spec.baseSpeed || 2.4;
     sliderBaseSpeed.value = speed;
-    labelSpeedTier.textContent = `${speed} (${lvl.speedLabel || this.getSpeedLabel(speed)})`;
+    labelSpeedTier.textContent = `${speed} (${spec.speedLabel || this.getSpeedLabel(speed)})`;
 
     // Body Size Multiplier
-    const bodyScale = lvl.bodySizeScale !== undefined ? lvl.bodySizeScale : 1.0;
+    const bodyScale = spec.bodySizeScale !== undefined ? spec.bodySizeScale : (this.editingFormat === 'mobile' ? 1.15 : 1.0);
     sliderBodyScale.value = bodyScale;
     this.updateBodyScaleLabel(bodyScale);
 
     // Wall Count Badge
-    wallCountBadge.textContent = (lvl.walls && lvl.walls.length) || 0;
+    wallCountBadge.textContent = (spec.walls && spec.walls.length) || 0;
 
     // Charges
     chargeBtns.forEach(btn => {
       const c = parseInt(btn.dataset.charges, 10);
-      btn.classList.toggle('active', c === (lvl.charges || 1));
+      btn.classList.toggle('active', c === (spec.charges || 1));
     });
 
     // Quotas & Par
-    inputQuotaTarget.value = lvl.target || 1;
-    const stars = lvl.stars || [lvl.target, Math.round(lvl.totalParticles * 0.5), Math.round(lvl.totalParticles * 0.75)];
-    inputQuotaStar2.value = stars[1] || Math.round(lvl.totalParticles * 0.5);
-    inputQuotaStar3.value = stars[2] || Math.round(lvl.totalParticles * 0.75);
-    inputParTime.value = lvl.parTime || 5.0;
+    inputQuotaTarget.value = spec.target || 1;
+    const stars = spec.stars || [spec.target, Math.round(spec.totalParticles * 0.5), Math.round(spec.totalParticles * 0.75)];
+    inputQuotaStar2.value = stars[1] || Math.round(spec.totalParticles * 0.5);
+    inputQuotaStar3.value = stars[2] || Math.round(spec.totalParticles * 0.75);
+    inputParTime.value = spec.parTime || 5.0;
   }
 
   updateBodyScaleLabel(val) {
@@ -368,7 +431,7 @@ class StudioController {
       total += parseInt(entitySliders[type].value, 10);
     });
     totalParticlesBadge.textContent = `${total} Bodies`;
-    this.activeLevel.totalParticles = total;
+    this.activeFormatSpec.totalParticles = total;
   }
 
   getSpeedLabel(speed) {
@@ -386,7 +449,7 @@ class StudioController {
   }
 
   autoBalanceQuotas() {
-    const lvl = this.activeLevel;
+    const spec = this.activeFormatSpec;
     let total = 0;
     entityTypes.forEach(type => {
       total += parseInt(entitySliders[type].value, 10);
@@ -406,17 +469,42 @@ class StudioController {
     const star3 = Math.max(star2 + 1, Math.round(total * 0.75));
     const parTime = +(Math.max(4.0, 4.0 + (5.0 - speed) * 1.4)).toFixed(1);
 
-    lvl.target = target;
-    lvl.stars = [target, star2, star3];
-    lvl.parTime = parTime;
+    spec.target = target;
+    spec.stars = [target, star2, star3];
+    spec.parTime = parTime;
 
     inputQuotaTarget.value = target;
     inputQuotaStar2.value = star2;
     inputQuotaStar3.value = star3;
     inputParTime.value = parTime;
 
-    this.showToast('Auto-balanced targets applied!');
+    this.showToast(`Auto-balanced targets for ${this.editingFormat}!`);
     this.respawnSimulation();
+  }
+
+  switchFormatSpec(format) {
+    this.editingFormat = format;
+    const targetViewport = format === 'mobile' ? 'mobile-portrait' : 'desktop-16-10';
+    
+    // Update Viewport header buttons
+    formatBtns.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.format === targetViewport);
+    });
+
+    this.applyViewportFormat(targetViewport);
+    this.loadLevelToInspector();
+    this.renderLevelSequenceList();
+    this.showToast(`Switched to ${format.toUpperCase()} Specification`);
+  }
+
+  copyToOppositeFormat() {
+    const source = this.editingFormat;
+    const target = source === 'desktop' ? 'mobile' : 'desktop';
+    const sourceSpec = this.activeLevel.formats[source];
+
+    // Deep copy
+    this.activeLevel.formats[target] = JSON.parse(JSON.stringify(sourceSpec));
+    this.showToast(`Copied ${source.toUpperCase()} spec to ${target.toUpperCase()}!`);
   }
 
   applyViewportFormat(format) {
@@ -453,17 +541,18 @@ class StudioController {
       height: h
     };
 
-    this.scale = w / REFERENCE_ARENA.width;
+    const refW = format === 'mobile-portrait' ? 540 : REFERENCE_ARENA.width;
+    this.scale = w / refW;
     this.grid.resize(this.arena, this.scale);
     this.respawnSimulation();
   }
 
   respawnSimulation() {
-    const lvl = this.activeLevel;
+    const spec = this.activeFormatSpec;
     this.explodedCount = 0;
     this.comboChain = 0;
     this.highestCombo = 0;
-    this.charges = lvl.charges || 1;
+    this.charges = spec.charges || 1;
     this.elapsedTime = 0;
     this.simState = 'ready';
 
@@ -478,10 +567,10 @@ class StudioController {
       return seed / 233280;
     };
 
-    const speed = lvl.baseSpeed || 2.4;
-    const bodyScale = lvl.bodySizeScale !== undefined ? lvl.bodySizeScale : 1.0;
+    const speed = spec.baseSpeed || 2.4;
+    const bodyScale = spec.bodySizeScale !== undefined ? spec.bodySizeScale : (this.editingFormat === 'mobile' ? 1.15 : 1.0);
     const typesToSpawn = [];
-    for (const [typeId, count] of Object.entries(lvl.distribution || {})) {
+    for (const [typeId, count] of Object.entries(spec.distribution || {})) {
       for (let i = 0; i < count; i++) {
         typesToSpawn.push(typeId);
       }
@@ -497,7 +586,7 @@ class StudioController {
 
     if (this.activeTool === 'spark') {
       clickPrompt.style.display = 'block';
-      clickPrompt.textContent = 'Click inside arena to ignite reaction';
+      clickPrompt.textContent = `Click inside arena to ignite reaction (${this.editingFormat.toUpperCase()})`;
     } else if (this.activeTool === 'wall') {
       clickPrompt.style.display = 'block';
       clickPrompt.textContent = 'Click & drag inside arena to draw barrier walls';
@@ -545,7 +634,7 @@ class StudioController {
       this.elapsedTime += dt;
     }
 
-    const walls = this.activeLevel.walls || [];
+    const walls = this.activeFormatSpec.walls || [];
 
     // Explosions & Singularities
     for (let i = this.explosions.length - 1; i >= 0; i--) {
@@ -643,7 +732,6 @@ class StudioController {
       if (!ft.alive) this.floatingTexts.splice(t, 1);
     }
 
-    // Check round end
     if (this.simState === 'active' && this.explosions.length === 0 && this.shrapnels.length === 0) {
       if (this.charges <= 0 || this.particles.filter(p => p.alive).length === 0) {
         this.simState = 'finished';
@@ -653,16 +741,16 @@ class StudioController {
   }
 
   updateTelemetryHUD() {
-    const lvl = this.activeLevel;
-    const total = lvl.totalParticles || this.particles.length || 1;
+    const spec = this.activeFormatSpec;
+    const total = spec.totalParticles || this.particles.length || 1;
     const pct = Math.round((this.explodedCount / total) * 100);
 
     telPopped.textContent = `${this.explodedCount} / ${total} (${pct}%)`;
     telCombo.textContent = `x${this.highestCombo}`;
-    telTime.textContent = `${this.elapsedTime.toFixed(1)}s / ${lvl.parTime || 5.0}s`;
+    telTime.textContent = `${this.elapsedTime.toFixed(1)}s / ${spec.parTime || 5.0}s`;
     telSparks.textContent = this.charges;
 
-    const starsThresholds = lvl.stars || [lvl.target, Math.round(total * 0.5), Math.round(total * 0.75)];
+    const starsThresholds = spec.stars || [spec.target, Math.round(total * 0.5), Math.round(total * 0.75)];
     let stars = 0;
     if (this.explodedCount >= starsThresholds[2]) stars = 3;
     else if (this.explodedCount >= starsThresholds[1]) stars = 2;
@@ -701,7 +789,7 @@ class StudioController {
     ctx.strokeRect(this.arena.x, this.arena.y, this.arena.width, this.arena.height);
 
     // 3. Render Level Obstacle Barrier Walls
-    const walls = this.activeLevel.walls || [];
+    const walls = this.activeFormatSpec.walls || [];
     for (let i = 0; i < walls.length; i++) {
       const w = walls[i];
       const wx1 = this.arena.x + w.x1 * this.arena.width;
@@ -718,7 +806,6 @@ class StudioController {
       const wx2 = this.arena.x + this.wallCurrentPos.x * this.arena.width;
       const wy2 = this.arena.y + this.wallCurrentPos.y * this.arena.height;
       
-      // Dashed Guide
       ctx.save();
       ctx.strokeStyle = '#e879f9';
       ctx.lineWidth = Math.max(2, 3.5 * this.scale);
@@ -728,7 +815,6 @@ class StudioController {
       ctx.lineTo(wx2, wy2);
       ctx.stroke();
 
-      // Nodes
       ctx.fillStyle = '#ffffff';
       [ [wx1, wy1], [wx2, wy2] ].forEach(([nx, ny]) => {
         ctx.beginPath();
@@ -784,7 +870,7 @@ class StudioController {
   }
 
   setupEventListeners() {
-    // Canvas Pointer Events (Supports Spark, Draw Wall, Erase Wall)
+    // Canvas Pointer Events
     canvas.addEventListener('pointerdown', (e) => {
       const rect = canvas.getBoundingClientRect();
       const clickX = (e.clientX - rect.left) * (this.arena.width / rect.width);
@@ -801,9 +887,7 @@ class StudioController {
         this.wallStartPos = { x: sx, y: sy };
         this.wallCurrentPos = { x: sx, y: sy };
       } else if (this.activeTool === 'erase') {
-        // Erase closest wall within tolerance
-        const walls = this.activeLevel.walls || [];
-        let erased = false;
+        const walls = this.activeFormatSpec.walls || [];
         for (let i = walls.length - 1; i >= 0; i--) {
           const w = walls[i];
           const wx1 = this.arena.x + w.x1 * this.arena.width;
@@ -821,7 +905,6 @@ class StudioController {
 
           if (distSq < (18 * this.scale) * (18 * this.scale)) {
             walls.splice(i, 1);
-            erased = true;
             this.showToast('Obstacle wall erased');
             wallCountBadge.textContent = walls.length;
             this.renderLevelSequenceList();
@@ -853,15 +936,15 @@ class StudioController {
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist > 0.04) {
-          if (!this.activeLevel.walls) this.activeLevel.walls = [];
-          this.activeLevel.walls.push({
+          if (!this.activeFormatSpec.walls) this.activeFormatSpec.walls = [];
+          this.activeFormatSpec.walls.push({
             x1: +this.wallStartPos.x.toFixed(3),
             y1: +this.wallStartPos.y.toFixed(3),
             x2: +this.wallCurrentPos.x.toFixed(3),
             y2: +this.wallCurrentPos.y.toFixed(3)
           });
-          this.showToast('Added barrier wall obstacle');
-          wallCountBadge.textContent = this.activeLevel.walls.length;
+          this.showToast(`Added obstacle wall to ${this.editingFormat.toUpperCase()}`);
+          wallCountBadge.textContent = this.activeFormatSpec.walls.length;
           this.renderLevelSequenceList();
           this.respawnSimulation();
         }
@@ -870,6 +953,11 @@ class StudioController {
         this.wallCurrentPos = null;
       }
     });
+
+    // Platform Spec Buttons (Desktop vs Mobile)
+    btnTargetDesktop.addEventListener('click', () => this.switchFormatSpec('desktop'));
+    btnTargetMobile.addEventListener('click', () => this.switchFormatSpec('mobile'));
+    btnSyncFormats.addEventListener('click', () => this.copyToOppositeFormat());
 
     // Tool Buttons (Spark / Wall / Erase)
     toolPillBtns.forEach(btn => {
@@ -891,9 +979,9 @@ class StudioController {
 
     // Clear All Walls
     btnClearWalls.addEventListener('click', () => {
-      if (this.activeLevel.walls && this.activeLevel.walls.length > 0) {
-        if (confirm(`Clear all ${this.activeLevel.walls.length} obstacle wall(s) in this stage?`)) {
-          this.activeLevel.walls = [];
+      if (this.activeFormatSpec.walls && this.activeFormatSpec.walls.length > 0) {
+        if (confirm(`Clear all ${this.activeFormatSpec.walls.length} obstacle wall(s) in this ${this.editingFormat} stage?`)) {
+          this.activeFormatSpec.walls = [];
           wallCountBadge.textContent = '0';
           this.renderLevelSequenceList();
           this.respawnSimulation();
@@ -958,7 +1046,7 @@ class StudioController {
         id,
         title: 'Custom Campaign',
         tagline: 'Authored in GeoChain Studio',
-        description: 'Custom puzzle sequence with obstacles.',
+        description: 'Custom puzzle sequence with multi-platform calibration.',
         badge: '✨',
         color: '#facc15',
         author: 'Designer',
@@ -967,17 +1055,33 @@ class StudioController {
           {
             level: 1,
             title: 'Initiation',
-            target: 3,
-            stars: [3, 6, 9],
-            totalParticles: 12,
-            baseSpeed: 4.2,
-            speedLabel: 'Swift',
-            bodySizeScale: 1.0,
-            parTime: 5.0,
-            charges: 1,
-            distribution: { standard: 12 },
-            walls: [],
-            tip: 'First test stage with custom mechanics.'
+            tip: 'First test stage with custom mechanics.',
+            formats: {
+              desktop: {
+                target: 3,
+                stars: [3, 6, 9],
+                totalParticles: 12,
+                baseSpeed: 4.2,
+                speedLabel: 'Swift',
+                bodySizeScale: 1.0,
+                parTime: 5.0,
+                charges: 1,
+                distribution: { standard: 12 },
+                walls: []
+              },
+              mobile: {
+                target: 2,
+                stars: [2, 5, 7],
+                totalParticles: 9,
+                baseSpeed: 3.8,
+                speedLabel: 'Brisk',
+                bodySizeScale: 1.15,
+                parTime: 5.0,
+                charges: 1,
+                distribution: { standard: 9 },
+                walls: []
+              }
+            }
           }
         ]
       };
@@ -1015,8 +1119,8 @@ class StudioController {
       entitySliders[type].addEventListener('input', (e) => {
         const val = parseInt(e.target.value, 10);
         entityValueLabels[type].textContent = val;
-        if (!this.activeLevel.distribution) this.activeLevel.distribution = {};
-        this.activeLevel.distribution[type] = val;
+        if (!this.activeFormatSpec.distribution) this.activeFormatSpec.distribution = {};
+        this.activeFormatSpec.distribution[type] = val;
         this.updateTotalParticlesBadge();
         this.renderLevelSequenceList();
         this.respawnSimulation();
@@ -1028,8 +1132,8 @@ class StudioController {
       const val = parseFloat(e.target.value);
       const label = this.getSpeedLabel(val);
       labelSpeedTier.textContent = `${val.toFixed(1)} (${label})`;
-      this.activeLevel.baseSpeed = val;
-      this.activeLevel.speedLabel = label;
+      this.activeFormatSpec.baseSpeed = val;
+      this.activeFormatSpec.speedLabel = label;
       this.renderLevelSequenceList();
       this.respawnSimulation();
     });
@@ -1037,7 +1141,7 @@ class StudioController {
     // Body Size Multiplier Slider
     sliderBodyScale.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value);
-      this.activeLevel.bodySizeScale = val;
+      this.activeFormatSpec.bodySizeScale = val;
       this.updateBodyScaleLabel(val);
       this.renderLevelSequenceList();
       this.respawnSimulation();
@@ -1049,7 +1153,7 @@ class StudioController {
         chargeBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         const c = parseInt(btn.dataset.charges, 10);
-        this.activeLevel.charges = c;
+        this.activeFormatSpec.charges = c;
         this.charges = c;
         this.respawnSimulation();
       });
@@ -1057,21 +1161,21 @@ class StudioController {
 
     // Quotas & Par
     inputQuotaTarget.addEventListener('input', (e) => {
-      this.activeLevel.target = parseInt(e.target.value, 10);
+      this.activeFormatSpec.target = parseInt(e.target.value, 10);
       this.updateTelemetryHUD();
     });
     inputQuotaStar2.addEventListener('input', (e) => {
-      if (!this.activeLevel.stars) this.activeLevel.stars = [1, 3, 5];
-      this.activeLevel.stars[1] = parseInt(e.target.value, 10);
+      if (!this.activeFormatSpec.stars) this.activeFormatSpec.stars = [1, 3, 5];
+      this.activeFormatSpec.stars[1] = parseInt(e.target.value, 10);
       this.updateTelemetryHUD();
     });
     inputQuotaStar3.addEventListener('input', (e) => {
-      if (!this.activeLevel.stars) this.activeLevel.stars = [1, 3, 5];
-      this.activeLevel.stars[2] = parseInt(e.target.value, 10);
+      if (!this.activeFormatSpec.stars) this.activeFormatSpec.stars = [1, 3, 5];
+      this.activeFormatSpec.stars[2] = parseInt(e.target.value, 10);
       this.updateTelemetryHUD();
     });
     inputParTime.addEventListener('input', (e) => {
-      this.activeLevel.parTime = parseFloat(e.target.value);
+      this.activeFormatSpec.parTime = parseFloat(e.target.value);
       this.updateTelemetryHUD();
     });
     btnAutocalcQuotas.addEventListener('click', () => this.autoBalanceQuotas());
@@ -1103,7 +1207,7 @@ class StudioController {
     btnCopyLevelJson.addEventListener('click', () => {
       const json = JSON.stringify(this.activeLevel, null, 2);
       navigator.clipboard.writeText(json);
-      this.showToast('Copied active Level JSON to clipboard!');
+      this.showToast('Copied active Level JSON (Dual Spec) to clipboard!');
     });
 
     btnExportCampaignJson.addEventListener('click', () => {
@@ -1139,7 +1243,7 @@ class StudioController {
           this.respawnSimulation();
           modalJsonSync.classList.remove('show');
           this.showToast(`Imported campaign "${parsed.title}"!`);
-        } else if (parsed.distribution && parsed.baseSpeed !== undefined) {
+        } else if (parsed.formats || parsed.distribution) {
           this.activeCampaign.levels.push(parsed);
           this.activeCampaign.levels.forEach((lvl, i) => { lvl.level = i + 1; });
           this.selectLevel(this.activeCampaign.levels.length - 1);

@@ -134,6 +134,18 @@
               <label for="input-level-tip">Contextual Hint / Designer Tip</label>
               <textarea id="input-level-tip" class="studio-textarea" rows="2" placeholder="High velocity! Bodies cross the arena quickly..."></textarea>
             </div>
+
+            <!-- Target Format Tab Switcher (Desktop vs Mobile Spec) -->
+            <div class="format-spec-container" style="margin-top: 10px;">
+              <div class="group-header-row">
+                <span class="control-sublabel">Platform Spec:</span>
+                <button id="btn-sync-formats" class="studio-btn-sm text-cyan" title="Copy active format settings to opposite platform">🔄 Copy to Other Platform</button>
+              </div>
+              <div class="format-target-pills">
+                <button id="btn-target-desktop" class="format-target-btn active" data-target-format="desktop">🖥️ Desktop Spec</button>
+                <button id="btn-target-mobile" class="format-target-btn" data-target-format="mobile">📱 Mobile Spec</button>
+              </div>
+            </div>
           </div>
 
           <div class="panel-divider"></div>
